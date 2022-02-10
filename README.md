@@ -3,6 +3,7 @@ Eigen fork with KLU linear solver using refactorisation
 ## KLU
 Sparse linear solver from https://github.com/DrTimothyAldenDavis/SuiteSparse
 
+## Eigen
 **Eigen is a C++ template library for linear algebra: matrices, vectors, numerical solvers, and related algorithms.**
 
 For more information go to http://eigen.tuxfamily.org/.
