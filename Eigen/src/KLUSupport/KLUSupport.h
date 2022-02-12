@@ -226,6 +226,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
         klu_free_numeric(&m_numeric,&m_common);
 
       grab(matrix.derived());
+      // temporary workaround for a problem in DPsim
       if(m_symbolic->nz != mp_matrix.nonZeros()){
         analyzePattern_impl();
         factorize_impl();
