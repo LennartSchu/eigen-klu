@@ -222,16 +222,46 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     void refactorize(const InputMatrixType& matrix)
     {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
-      if(m_numeric)
-        klu_free_numeric(&m_numeric,&m_common);
+      eigen_assert(m_factorizationIsOk && "KLU: you must first call factorize()");
+      /**/
 
       grab(matrix.derived());
       // temporary workaround for a problem in DPsim
       if(m_symbolic->nz != mp_matrix.nonZeros()){
+        if(m_numeric)
+          klu_free_numeric(&m_numeric,&m_common);
         analyzePattern_impl();
         factorize_impl();
       } else {
         refactorize_impl();
+      }
+    }
+
+    /** Performs a numeric partial re-decomposition of \a matrix
+      *
+      * The given matrix must has the same sparcity than the matrix on which the pattern anylysis has been performed.
+      * The pivoting values are chosen the same
+      * The re-decomposition is performed at a minimal subset of columns
+      *
+      * \sa analyzePattern(), compute()
+      */
+    template<typename InputMatrixType>
+    void partial_refactorize(const InputMatrixType& matrix)
+    {
+      eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
+      eigen_assert(m_factorizationIsOk && "KLU: you must first call factorize()");
+      /* TODO: eigen_assert(m_factorizationPathIsOk ... ) */
+      /**/
+
+      grab(matrix.derived());
+      // temporary workaround for a problem in DPsim
+      if(m_symbolic->nz != mp_matrix.nonZeros()){
+        if(m_numeric)
+          klu_free_numeric(&m_numeric,&m_common);
+        analyzePattern_impl();
+        factorize_impl();
+      } else {
+        partial_refactorize_impl();
       }
     }
 
@@ -264,6 +294,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_analysisIsOk = false;
       m_factorizationIsOk = false;
       m_refactorizationIsOk = false;
+      m_partial_refactorizationIsOk = false;
       m_symbolic = klu_analyze(internal::convert_index<int>(mp_matrix.rows()),
                                      const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
                                      &m_common);
@@ -291,11 +322,23 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     {
 
       int m_refact = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
-                                    m_symbolic, m_numeric, &m_common/*, Scalar()*/);
+                                    m_symbolic, m_numeric, &m_common);
 
 
       m_info = m_refact ? Success : NumericalIssue;
       m_refactorizationIsOk = m_refact ? 1 : 0;
+      m_extractedDataAreDirty = true;
+    }
+
+    void partial_refactorize_impl()
+    {
+      /* TODO: Call klu_partial here */
+      int m_partial_refact = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+                                    m_symbolic, m_numeric, &m_common);
+
+
+      m_info = m_partial_refact ? Success : NumericalIssue;
+      m_partial_refactorizationIsOk = m_partial_refact ? 1 : 0;
       m_extractedDataAreDirty = true;
     }
 
@@ -332,6 +375,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     mutable ComputationInfo m_info;
     int m_factorizationIsOk;
     int m_refactorizationIsOk;
+    int m_partial_refactorizationIsOk;
     int m_analysisIsOk;
     mutable bool m_extractedDataAreDirty;
 
