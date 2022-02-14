@@ -1,0 +1,40 @@
+// This file is part of Eigen, a lightweight C++ template library
+// for linear algebra.
+//
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#ifndef EIGEN_NICSLUSUPPORT_MODULE_H
+#define EIGEN_NICSLUSUPPORT_MODULE_H
+
+#include <Eigen/SparseCore>
+
+#include <Eigen/src/Core/util/DisableStupidWarnings.h>
+
+extern "C" {
+#include <nicslu.h>
+#include <partial_refactorization.h>
+   }
+
+/** \ingroup Support_modules
+  * \defgroup NICSLUSupport_Module NICSLUSupport module
+  *
+  * This module provides an interface to the NICSLU library
+  * It provides the following factorization class:
+  * - class NICSLU: a sparse parallel LU factorization, well-suited for circuit simulation.
+  *
+  * \code
+  * #include <Eigen/NICSLUSupport>
+  * \endcode
+  *
+  * In order to use this module, the nicslu headers must be accessible from the include paths, and your binary must be linked to the nicslu library and its dependencies.
+  * For a cmake based project, you can use our FindNICSLU.cmake module to help you in this task.
+  *
+  */
+
+#include "src/NICSLUSupport/NICSLUSupport.h"
+
+#include <Eigen/src/Core/util/ReenableStupidWarnings.h>
+
+#endif // EIGEN_NICSLUSUPPORT_MODULE_H

@@ -268,6 +268,7 @@ template<typename MatrixType, int Direction = BothDirections> class Reverse;
 template<typename MatrixType> class FullPivLU;
 template<typename MatrixType> class PartialPivLU;
 template<typename MatrixType> class KLU;
+template<typename MatrixType> class NICSLU;
 namespace internal {
 template<typename MatrixType> struct inverse_impl;
 }
