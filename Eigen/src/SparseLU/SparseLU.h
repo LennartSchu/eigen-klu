@@ -120,7 +120,7 @@ private:
   *  "unsupported/Eigen/src/IterativeSolvers/Scaling.h"
   * 
   * \tparam _MatrixType The type of the sparse matrix. It must be a column-major SparseMatrix<>
-  * \tparam _OrderingType The ordering method to use, either AMD, COLAMD or METIS. Default is COLMAD
+  * \tparam _OrderingType The ordering method to use, either AMD, COLAMD or METIS. Default is COLAMD
   *
   * \implsparsesolverconcept
   * 

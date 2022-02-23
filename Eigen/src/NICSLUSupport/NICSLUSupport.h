@@ -360,7 +360,6 @@ protected:
     nicslu->changeVector = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
     // identify changed values
     // changeVector == vector of changes in LU-matrix (i.e. including permutations)
-    unsigned int row;
     for(std::pair<UInt, UInt> i : changedEntries){
       row = i.first;
       nicslu->changeVector[nicslu->pivot[nicslu->row_perm_inv[row]]] = 1;
