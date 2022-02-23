@@ -246,7 +246,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       * \sa analyzePattern(), compute()
       */
     template<typename InputMatrixType>
-    void partial_refactorize(const InputMatrixType& matrix)
+    void refactorize_partial(const InputMatrixType& matrix)
     {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
       eigen_assert(m_factorizationIsOk && "KLU: you must first call factorize()");
