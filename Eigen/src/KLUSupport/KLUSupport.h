@@ -344,7 +344,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
                                     m_symbolic, &m_common, Scalar());
 
       // TODO: Call compute factorization path
-      int changeLen = changedEntries.length();
+      int changeLen = changedEntries.size();
       int *c = calloc(changeLen, sizeof(int));
       for(std::pair<UInt, UInt> i : changedEntries){
         c[i] = i.second;
