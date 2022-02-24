@@ -211,6 +211,26 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       factorize_impl();
     }
 
+    /** Performs a numeric decomposition of \a matrix and computes factorization path
+      *
+      * The given matrix must has the same sparcity than the matrix on which the pattern anylysis has been performed.
+      *
+      * \sa analyzePattern(), compute()
+      */
+    template<typename InputMatrixType>
+    void factorize_partial(const InputMatrixType& matrix)
+    {
+      eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
+      if(m_numeric)
+        klu_free_numeric(&m_numeric,&m_common);
+
+      grab(matrix.derived());
+      if(m_symbolic->nz != mp_matrix.nonZeros()){
+        analyzePattern_impl();
+      }
+      partial_factorize_impl();
+    }
+
     /** Performs a numeric re-decomposition of \a matrix
       *
       * The given matrix must has the same sparcity than the matrix on which the pattern anylysis has been performed.
@@ -313,6 +333,18 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
                                     m_symbolic, &m_common, Scalar());
 
 
+      m_info = m_numeric ? Success : NumericalIssue;
+      m_factorizationIsOk = m_numeric ? 1 : 0;
+      m_extractedDataAreDirty = true;
+    }
+
+    void partial_factorize_impl()
+    {
+
+      m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+                                    m_symbolic, &m_common, Scalar());
+
+      // TODO: call to compute refactorization path here
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
