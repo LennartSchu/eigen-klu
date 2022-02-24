@@ -74,6 +74,9 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     typedef SparseMatrix<Scalar> LUMatrixType;
     typedef SparseMatrix<Scalar,ColMajor,int> KLUMatrixType;
     typedef Ref<const KLUMatrixType, StandardCompressedFormat> KLUMatrixRef;
+
+    typedef unsigned int UInt;
+    std::vector<std::pair<UInt, UInt>> changedEntries;
     enum {
       ColsAtCompileTime = MatrixType::ColsAtCompileTime,
       MaxColsAtCompileTime = MatrixType::MaxColsAtCompileTime
@@ -191,6 +194,22 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       return m_common;
     }
 
+    /** Performs a numeric decomposition of \a matrix and computes factorization path
+     *
+     * The given matrix must has the same sparcity than the matrix on which the
+     * pattern anylysis has been performed.
+     *
+     * \sa analyzePattern(), compute()
+     */
+    template <typename InputMatrixType, typename ListType>
+    void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
+      eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
+
+      grab(matrix.derived());
+      this->changedEntries = variableList;
+      factorize_with_path_impl();
+    }
+
     /** Performs a numeric decomposition of \a matrix
       *
       * The given matrix must has the same sparcity than the matrix on which the pattern anylysis has been performed.
@@ -209,26 +228,6 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
         analyzePattern_impl();
       }
       factorize_impl();
-    }
-
-    /** Performs a numeric decomposition of \a matrix and computes factorization path
-      *
-      * The given matrix must has the same sparcity than the matrix on which the pattern anylysis has been performed.
-      *
-      * \sa analyzePattern(), compute()
-      */
-    template<typename InputMatrixType>
-    void factorize_partial(const InputMatrixType& matrix)
-    {
-      eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
-      if(m_numeric)
-        klu_free_numeric(&m_numeric,&m_common);
-
-      grab(matrix.derived());
-      if(m_symbolic->nz != mp_matrix.nonZeros()){
-        analyzePattern_impl();
-      }
-      partial_factorize_impl();
     }
 
     /** Performs a numeric re-decomposition of \a matrix
@@ -269,7 +268,8 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     void refactorize_partial(const InputMatrixType& matrix)
     {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
-      eigen_assert(m_factorizationIsOk && "KLU: you must first call factorize()");
+      eigen_assert(m_factorizationIsOk && "KLU: you must first call factorize_partial()");
+      eigen_assert(m_partial_is_ok && "KLU: factorization path is not OK");
       /* TODO: eigen_assert(m_factorizationPathIsOk ... ) */
       /**/
 
@@ -279,9 +279,9 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
         if(m_numeric)
           klu_free_numeric(&m_numeric,&m_common);
         analyzePattern_impl();
-        factorize_impl();
+        factorize_with_path_impl();
       } else {
-        partial_refactorize_impl();
+        refactorize_partial_impl();
       }
     }
 
@@ -315,6 +315,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_factorizationIsOk = false;
       m_refactorizationIsOk = false;
       m_partial_refactorizationIsOk = false;
+      m_partial_is_ok = false;
       m_symbolic = klu_analyze(internal::convert_index<int>(mp_matrix.rows()),
                                      const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
                                      &m_common);
@@ -338,16 +339,22 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
     }
 
-    void partial_factorize_impl()
-    {
-
+    void factorize_with_path_impl() {
       m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, &m_common, Scalar());
 
-      // TODO: call to compute refactorization path here
+      // TODO: Call compute factorization path
+      int changeLen = changedEntries.length();
+      int *c = calloc(changeLen, sizeof(int));
+      for(std::pair<UInt, UInt> i : changedEntries){
+        c[i] = i.second;
+      }
+      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, c, changeLen);
+
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
+      // TODO : only 1 if factorization path is OK
     }
 
     void refactorize_impl()
@@ -362,10 +369,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
     }
 
-    void partial_refactorize_impl()
+    void refactorize_partial_impl()
     {
       /* TODO: Call klu_partial here */
-      int m_partial_refact = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+      int m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
 
@@ -409,6 +416,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     int m_refactorizationIsOk;
     int m_partial_refactorizationIsOk;
     int m_analysisIsOk;
+    int m_partial_is_ok;
     mutable bool m_extractedDataAreDirty;
 
   private:
