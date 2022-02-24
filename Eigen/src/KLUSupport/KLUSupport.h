@@ -345,11 +345,13 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
       // TODO: Call compute factorization path
       int changeLen = changedEntries.size();
-      int *c = calloc(changeLen, sizeof(int));
+      int *changeVector = (int*)calloc(changeLen, sizeof(int));
+      int counter = 0;
       for(std::pair<UInt, UInt> i : changedEntries){
-        c[i] = i.second;
+        changeVector[counter] = i.second;
+        counter++;
       }
-      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, c, changeLen);
+      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
 
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
