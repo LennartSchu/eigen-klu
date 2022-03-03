@@ -306,7 +306,6 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
 
       klu_defaults(&m_common);
-      m_common.scale = -1;
     }
 
     void analyzePattern_impl()
@@ -344,9 +343,8 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, &m_common, Scalar());
 
-      // TODO: Call compute factorization path
       int changeLen = changedEntries.size();
-      int *changeVector = (int*)calloc(changeLen, sizeof(int));
+      int *changeVector = (int*)calloc(sizeof(int), changeLen);
       int counter = 0;
       for(std::pair<UInt, UInt> i : changedEntries){
         changeVector[counter] = i.second;
@@ -357,12 +355,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
-      // TODO : only 1 if factorization path is OK
     }
 
     void refactorize_impl()
     {
-
       int m_refact = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
@@ -373,7 +369,6 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
     void refactorize_partial_impl()
     {
-      /* TODO: Call klu_partial here */
       int m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
