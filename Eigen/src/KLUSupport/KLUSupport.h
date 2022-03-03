@@ -306,6 +306,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
 
       klu_defaults(&m_common);
+      m_common.scale = -1;
     }
 
     void analyzePattern_impl()
@@ -364,7 +365,6 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
       int m_refact = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
-
 
       m_info = m_refact ? Success : NumericalIssue;
       m_refactorizationIsOk = m_refact ? 1 : 0;
