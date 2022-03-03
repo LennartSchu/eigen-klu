@@ -372,7 +372,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       int m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
-
+      if(m_common.status == KLU_PIVOT_FAULT){
+        /* pivot became too small => fully factorize again */
+        factorize_with_path_impl();
+      }
       m_info = m_partial_refact ? Success : NumericalIssue;
       m_partial_refactorizationIsOk = m_partial_refact ? 1 : 0;
       m_extractedDataAreDirty = true;
