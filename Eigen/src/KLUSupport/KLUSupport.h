@@ -306,6 +306,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
 
       klu_defaults(&m_common);
+      m_common.ordering = 1;
     }
 
     void analyzePattern_impl()
