@@ -329,7 +329,6 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
     void factorize_impl()
     {
-
       m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, &m_common, Scalar());
 
@@ -343,43 +342,38 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, &m_common, Scalar());
 
-      // TODO: Call compute factorization path
       int changeLen = changedEntries.size();
       int *changeVector = (int*)calloc(changeLen, sizeof(int));
       int counter = 0;
+
       for(std::pair<UInt, UInt> i : changedEntries){
-        changeVector[counter] = i.second;
-        counter++;
+        changeVector[counter++] = i.second;
       }
+      
       m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
 
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
-      // TODO : only 1 if factorization path is OK
     }
 
     void refactorize_impl()
     {
-
-      int m_refact = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+      int RET = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
-
-      m_info = m_refact ? Success : NumericalIssue;
-      m_refactorizationIsOk = m_refact ? 1 : 0;
+      m_info = RET == 1 ? Success : NumericalIssue;
+      m_refactorizationIsOk = RET == 1 ? 1 : 0;
       m_extractedDataAreDirty = true;
     }
 
     void refactorize_partial_impl()
     {
-      /* TODO: Call klu_partial here */
-      int m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+      int RET = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
-
-      m_info = m_partial_refact ? Success : NumericalIssue;
-      m_partial_refactorizationIsOk = m_partial_refact ? 1 : 0;
+      m_info = RET == 1 ? Success : NumericalIssue;
+      m_partial_refactorizationIsOk = RET == 1 ? 1 : 0;
       m_extractedDataAreDirty = true;
     }
 
@@ -475,7 +469,7 @@ bool KLU<MatrixType>::_solve_impl(const MatrixBase<BDerived> &b, MatrixBase<XDer
   x = b;
   int info = klu_solve(m_symbolic, m_numeric, b.rows(), rhsCols, x.const_cast_derived().data(), const_cast<klu_common*>(&m_common), Scalar());
 
-  m_info = info!=0 ? Success : NumericalIssue;
+  m_info = info == 1 ? Success : NumericalIssue;
   return true;
 }
 

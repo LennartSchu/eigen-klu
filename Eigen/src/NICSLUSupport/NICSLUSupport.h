@@ -10,6 +10,7 @@
 
 #ifndef EIGEN_NICSLUSUPPORT_H
 #define EIGEN_NICSLUSUPPORT_H
+#include <list>
 
 namespace Eigen {
 
@@ -310,7 +311,7 @@ protected:
     nicslu->cfgi[1] = 1;
 
     // setting pivoting tolerance for refatorization
-    nicslu->cfgf[31] = 1e-4;
+    nicslu->cfgf[31] = 1e-8;
     char *pivot_tolerance_env = getenv("NICSLU_PIVOT_TOLERANCE");
     if (pivot_tolerance_env != NULL) {
       double pivot_tolerance = atof(pivot_tolerance_env);
@@ -342,7 +343,8 @@ protected:
 
   void factorize_impl(){
     int numOk;
-    numOk = NicsLU_ResetMatrixValues(nicslu, const_cast<Scalar *>(mp_matrix.valuePtr()));
+    Scalar* Az = const_cast<Scalar *>(mp_matrix.valuePtr());
+    numOk = NicsLU_ResetMatrixValues(nicslu, Az);
     numOk = NicsLU_Factorize(nicslu);
 
     m_info = numOk == 0 ? Success : NumericalIssue;
@@ -354,19 +356,29 @@ protected:
 
   void factorize_with_path_impl() {
     int numOk;
-    numOk = NicsLU_ResetMatrixValues(nicslu, const_cast<Scalar *>(mp_matrix.valuePtr()));
+    Scalar* Az = const_cast<Scalar *>(mp_matrix.valuePtr());
+    numOk = NicsLU_ResetMatrixValues(nicslu, Az);
     numOk = NicsLU_Factorize(nicslu);
 
-    nicslu->changeVector = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
+    //nicslu->changeVector = (uint__t*)calloc(changeLen, sizeof(uint__t));
     // identify changed values
     // changeVector == vector of changes in LU-matrix (i.e. including permutations)#
-    int row;
+    int counter = 0;
+    std::list<int> storage;
     for(std::pair<UInt, UInt> i : changedEntries){
-      row = i.first;
-      nicslu->changeVector[nicslu->pivot[nicslu->row_perm_inv[row]]] = 1;
+        storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
     }
-    partial_refactorization(nicslu, PART_CSR);
-    //printlist(nicslu->path);
+    storage.sort();
+    storage.unique();
+    nicslu->changeVectorLen = storage.size();
+    nicslu->changeVector = (uint__t*)calloc(nicslu->changeVectorLen, sizeof(uint__t));
+    for(auto i : storage)
+    {
+      nicslu->changeVector[counter] = i;
+      counter++;
+    }
+
+    NicsLU_compute_path(nicslu);
 
     m_info = numOk == 0 ? Success : NumericalIssue;
     m_factorizationIsOk = numOk == 0 ? 1 : 0;
@@ -391,13 +403,21 @@ protected:
       nicslu->changeVector = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
       // identify changed values
       // changeVector == vector of changes in LU-matrix (i.e. including permutations)
-      unsigned int row;
+      int counter = 0;
+      std::list<int> storage;
       for(std::pair<UInt, UInt> i : changedEntries){
-        row = i.first;
-        nicslu->changeVector[nicslu->pivot[nicslu->row_perm_inv[row]]] = 1;
+          storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
       }
-      partial_refactorization(nicslu, PART_CSR);
-      //printlist(nicslu->path);
+      storage.sort();
+      storage.unique();
+      nicslu->changeVectorLen = storage.size();
+      nicslu->changeVector = (uint__t*)calloc(nicslu->changeVectorLen, sizeof(uint__t));
+      for(auto i : storage)
+      {
+        nicslu->changeVector[counter] = i;
+        counter++;
+      }
+      NicsLU_compute_path(nicslu);
 
       m_factorizationIsOk = numOk == 0 ? 1 : 0;
     } else {
