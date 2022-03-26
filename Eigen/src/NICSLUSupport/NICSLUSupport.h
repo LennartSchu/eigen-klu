@@ -113,10 +113,9 @@ public:
   ~NICSLU() {
     if (m_symbolic) {
       NicsLU_Destroy(nicslu);
-
       m_isInitialized = false;
       nicslu = NULL;
-      nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
+      //nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
       m_symbolic = 0;
       m_numeric = 0;
     }
@@ -232,7 +231,7 @@ public:
     this->changedEntries = variableList;
     factorize_with_path_impl();
   }
-  
+
 
   /** Performs a numeric decomposition of \a matrix
    *
@@ -370,15 +369,16 @@ protected:
     }
     storage.sort();
     storage.unique();
-    nicslu->changeVectorLen = storage.size();
-    nicslu->changeVector = (uint__t*)calloc(nicslu->changeVectorLen, sizeof(uint__t));
+    uint__t changeVectorLen = storage.size();
+    uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
     for(auto i : storage)
     {
-      nicslu->changeVector[counter] = i;
+      changeVector[counter] = i;
       counter++;
     }
 
-    NicsLU_compute_path(nicslu);
+    NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
+    free(changeVector);
 
     m_info = numOk == 0 ? Success : NumericalIssue;
     m_factorizationIsOk = numOk == 0 ? 1 : 0;
@@ -400,7 +400,6 @@ protected:
       analyzePattern_impl();
       numOk = NicsLU_Factorize(nicslu);
 
-      nicslu->changeVector = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
       // identify changed values
       // changeVector == vector of changes in LU-matrix (i.e. including permutations)
       int counter = 0;
@@ -410,14 +409,15 @@ protected:
       }
       storage.sort();
       storage.unique();
-      nicslu->changeVectorLen = storage.size();
-      nicslu->changeVector = (uint__t*)calloc(nicslu->changeVectorLen, sizeof(uint__t));
+      uint__t changeVectorLen = storage.size();
+      uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
       for(auto i : storage)
       {
-        nicslu->changeVector[counter] = i;
+        changeVector[counter] = i;
         counter++;
       }
-      NicsLU_compute_path(nicslu);
+      NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
+      free(changeVector);
 
       m_factorizationIsOk = numOk == 0 ? 1 : 0;
     } else {

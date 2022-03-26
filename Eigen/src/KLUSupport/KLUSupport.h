@@ -351,7 +351,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       }
       
       m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
-
+      free(changeVector);
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
