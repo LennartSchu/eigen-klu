@@ -327,8 +327,9 @@ protected:
     }
 
     okAnalyze = NicsLU_Analyze(nicslu);
-    NicsLU_CreateThreads(nicslu, 1, FALSE);
-    NicsLU_BindThreads(nicslu, FALSE);
+    // NicsLU_CreateScheduler(nicslu);
+    // NicsLU_CreateThreads(nicslu, 1, FALSE);
+    // NicsLU_BindThreads(nicslu, FALSE);
 
     if (okCreate == 0 && okAnalyze == 0) {
       m_symbolic = 1;
