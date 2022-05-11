@@ -453,7 +453,7 @@ protected:
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
 
-    uint_t* varying = calloc(nicslu->n, sizeof(uint__t));
+    uint__t* varying = calloc(nicslu->n, sizeof(uint__t));
     for(std::pair<UInt, UInt> i : changedEntries){
       varying[i.first] = 1;
       varying[i.second] = 1;
@@ -508,7 +508,7 @@ protected:
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
 
-    uint_t* varying = calloc(nicslu->n, sizeof(uint__t));
+    uint__t* varying = calloc(nicslu->n, sizeof(uint__t));
     for(std::pair<UInt, UInt> i : changedEntries){
       varying[i.first] = 1;
       varying[i.second] = 1;
