@@ -386,6 +386,7 @@ protected:
 
     nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = 1;
+    nicslu->cfgi[9] = 1;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
@@ -453,7 +454,7 @@ protected:
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
 
-    uint__t* varying = calloc(nicslu->n, sizeof(uint__t));
+    uint__t* varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
     for(std::pair<UInt, UInt> i : changedEntries){
       varying[i.first] = 1;
       varying[i.second] = 1;
@@ -508,7 +509,7 @@ protected:
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
 
-    uint__t* varying = calloc(nicslu->n, sizeof(uint__t));
+    uint__t* varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
     for(std::pair<UInt, UInt> i : changedEntries){
       varying[i.first] = 1;
       varying[i.second] = 1;
@@ -582,9 +583,9 @@ protected:
     nicslu->start = nicslu->n;
     std::list<int> storage;
     for(std::pair<UInt, UInt> i : changedEntries){
-        if (nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
+        if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
         {
-          nicslu->start = nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
+          nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
         }
     }
 
