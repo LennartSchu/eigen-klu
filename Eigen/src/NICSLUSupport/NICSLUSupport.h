@@ -11,6 +11,7 @@
 #ifndef EIGEN_NICSLUSUPPORT_H
 #define EIGEN_NICSLUSUPPORT_H
 #include <list>
+#include <iostream>
 
 namespace Eigen {
 
@@ -316,6 +317,21 @@ public:
     eigen_assert(m_factorizationIsOk &&
                  "NICSLU: you must first call factorize()");
     grab(matrix.derived());
+    // static int counter = 0;
+    // if (counter < 100)
+    // {
+    //   char str[32];
+    //   char counterstring[32];
+    //   sprintf(counterstring, "%d", counter);
+    //   strcpy(str, "A");
+    //   strcat(str, counterstring);
+    //   strcat(str, ".dense");
+    //   std::ofstream ofs(str);
+    //   ofs.precision(12);
+    //   counter++;
+    //   ofs << mp_matrix << std::endl;
+    //   ofs.close();
+    // }
     refactorize_impl();
   }
 
@@ -386,7 +402,8 @@ protected:
 
     nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = 1;
-    nicslu->cfgi[9] = 1;
+    //nicslu->cfgi[9] = 1;
+    nicslu->cfgi[9] = 0;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
