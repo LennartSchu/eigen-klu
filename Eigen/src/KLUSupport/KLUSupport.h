@@ -306,7 +306,9 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
 
       klu_defaults(&m_common);
-      m_common.ordering = 1;
+      // m_common.ordering = 1;
+      // use no scaling for now. TODO: FIX!
+      m_common.scale = 0;
     }
 
     void analyzePattern_impl()
@@ -351,7 +353,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
         changeVector[counter] = i.second;
         counter++;
       }
-      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+      m_partial_is_ok = klu_compute_path2(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
 
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
