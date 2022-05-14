@@ -202,9 +202,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
      * \sa analyzePattern(), compute()
      */
     template <typename InputMatrixType, typename ListType>
-    void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
+    void factorize_partial(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
-
+      /* there's only dumping if fact.path is computed */
+      m_common.dump = doDump;
       grab(matrix.derived());
       this->changedEntries = variableList;
       factorize_with_path_impl();
@@ -306,6 +307,9 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
 
       klu_defaults(&m_common);
+      // m_common.ordering = 1;
+      // use no scaling for now. TODO: FIX!
+      m_common.scale = 0;
     }
 
     void analyzePattern_impl()
@@ -329,6 +333,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
     void factorize_impl()
     {
+
       m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, &m_common, Scalar());
 
@@ -343,15 +348,14 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
                                     m_symbolic, &m_common, Scalar());
 
       int changeLen = changedEntries.size();
-      int *changeVector = (int*)calloc(changeLen, sizeof(int));
+      int *changeVector = (int*)calloc(sizeof(int), changeLen);
       int counter = 0;
-
       for(std::pair<UInt, UInt> i : changedEntries){
-        changeVector[counter++] = i.second;
+        changeVector[counter] = i.second;
+        counter++;
       }
-      
-      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
-      free(changeVector);
+      m_partial_is_ok = klu_compute_path2(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
@@ -359,21 +363,25 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
     void refactorize_impl()
     {
-      int RET = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+      int m_refact = klu_refactor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
-      m_info = RET == 1 ? Success : NumericalIssue;
-      m_refactorizationIsOk = RET == 1 ? 1 : 0;
+      m_info = m_refact ? Success : NumericalIssue;
+      m_refactorizationIsOk = m_refact ? 1 : 0;
       m_extractedDataAreDirty = true;
     }
 
     void refactorize_partial_impl()
     {
-      int RET = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+      int m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
-      m_info = RET == 1 ? Success : NumericalIssue;
-      m_partial_refactorizationIsOk = RET == 1 ? 1 : 0;
+      if(m_common.status == KLU_PIVOT_FAULT){
+        /* pivot became too small => fully factorize again */
+        factorize_impl();
+      }
+      m_info = m_partial_refact ? Success : NumericalIssue;
+      m_partial_refactorizationIsOk = m_partial_refact ? 1 : 0;
       m_extractedDataAreDirty = true;
     }
 
@@ -469,7 +477,7 @@ bool KLU<MatrixType>::_solve_impl(const MatrixBase<BDerived> &b, MatrixBase<XDer
   x = b;
   int info = klu_solve(m_symbolic, m_numeric, b.rows(), rhsCols, x.const_cast_derived().data(), const_cast<klu_common*>(&m_common), Scalar());
 
-  m_info = info == 1 ? Success : NumericalIssue;
+  m_info = info!=0 ? Success : NumericalIssue;
   return true;
 }
 

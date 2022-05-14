@@ -276,11 +276,12 @@ public:
    * \sa analyzePattern(), compute()
    */
   template <typename InputMatrixType, typename ListType>
-  void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
+  void factorize_partial(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
     eigen_assert(m_analysisIsOk &&
                  "NICSLU: you must first call analyzePattern()");
 
     grab(matrix.derived());
+    nicslu->cfgi[9] = doDump;
     this->changedEntries = variableList;
     factorize_with_path_impl();
   }
@@ -402,7 +403,6 @@ protected:
 
     nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = 1;
-    //nicslu->cfgi[9] = 1;
     nicslu->cfgi[9] = 0;
 
     // setting pivoting tolerance for refatorization
