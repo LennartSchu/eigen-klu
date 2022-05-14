@@ -202,9 +202,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
      * \sa analyzePattern(), compute()
      */
     template <typename InputMatrixType, typename ListType>
-    void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
+    void factorize_partial(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
-
+      /* there's only dumping if fact.path is computed */
+      m_common.dump = doDump;
       grab(matrix.derived());
       this->changedEntries = variableList;
       factorize_with_path_impl();
