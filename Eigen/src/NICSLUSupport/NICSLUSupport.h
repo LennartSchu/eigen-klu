@@ -403,7 +403,6 @@ protected:
 
     nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = 1;
-    nicslu->cfgi[9] = 0;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
