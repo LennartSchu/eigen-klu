@@ -205,7 +205,8 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     void factorize_partial(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
       /* there's only dumping if fact.path is computed */
-      m_common.dump = doDump;
+      m_dump = doDump;
+      m_common.dump = m_dump;
       grab(matrix.derived());
       this->changedEntries = variableList;
       factorize_with_path_impl();
@@ -309,7 +310,8 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       klu_defaults(&m_common);
       // m_common.ordering = 1;
       // use no scaling for now. TODO: FIX!
-      m_common.scale = 0;
+      m_scale = 0;
+      m_common.scale = m_scale;
     }
 
     void analyzePattern_impl()
@@ -422,6 +424,8 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     int m_analysisIsOk;
     int m_partial_is_ok;
     mutable bool m_extractedDataAreDirty;
+    int m_dump;
+    int m_scale;
 
   private:
     KLU(const KLU& ) { }

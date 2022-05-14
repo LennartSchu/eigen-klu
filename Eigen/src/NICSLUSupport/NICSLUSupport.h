@@ -281,7 +281,9 @@ public:
                  "NICSLU: you must first call analyzePattern()");
 
     grab(matrix.derived());
-    nicslu->cfgi[9] = doDump;
+    m_dump = doDump;
+    m_scale = 1;
+    nicslu->cfgi[9] = m_dump;
     this->changedEntries = variableList;
     factorize_with_path_impl();
   }
@@ -450,8 +452,9 @@ protected:
         (unsigned int *)(mp_matrix.innerIndexPtr()),
         (unsigned int *)(mp_matrix.outerIndexPtr()));
 
-    nicslu->cfgi[0] = 0;
-    nicslu->cfgi[1] = 1;
+    //nicslu->cfgi[0] = 0;
+    nicslu->cfgi[1] = m_scale;
+    nicslu->cfgi[9] = m_dump;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
@@ -505,8 +508,9 @@ protected:
         (unsigned int *)(mp_matrix.innerIndexPtr()),
         (unsigned int *)(mp_matrix.outerIndexPtr()));
 
-    nicslu->cfgi[0] = 0;
-    nicslu->cfgi[1] = 1;
+    //nicslu->cfgi[0] = 0;
+    nicslu->cfgi[1] = m_scale;
+    nicslu->cfgi[9] = m_dump;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
@@ -818,6 +822,8 @@ protected:
   int m_symbolic;
   int m_numeric;
   int m_is_first_partial;
+  int m_dump;
+  int m_scale;
 
 private:
   //    NICSLU(const NICSLU& ) { }
