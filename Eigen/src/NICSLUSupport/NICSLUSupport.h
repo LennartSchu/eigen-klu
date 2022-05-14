@@ -11,7 +11,6 @@
 #ifndef EIGEN_NICSLUSUPPORT_H
 #define EIGEN_NICSLUSUPPORT_H
 #include <list>
-#include <iostream>
 
 namespace Eigen {
 
@@ -196,6 +195,8 @@ public:
       m_symbolic = 0;
       m_numeric = 0;
     }
+    m_scale = 1;
+    m_dump = 0;
 
     grab(matrix.derived());
 
@@ -212,7 +213,7 @@ public:
    * \sa factorize(), compute()
    */
   template <typename InputMatrixType, typename ListType>
-  void analyzePatternFP(const InputMatrixType &matrix, const ListType& variableList) {
+  void analyzePatternFP(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
     if (m_symbolic) {
       NicsLU_Destroy(nicslu);
       // free(nicslu);
@@ -222,6 +223,8 @@ public:
       m_symbolic = 0;
       m_numeric = 0;
     }
+    m_dump = doDump;
+    m_scale = 1;
 
     grab(matrix.derived());
     this->changedEntries = variableList;
@@ -238,7 +241,7 @@ public:
    * \sa factorize(), compute()
    */
   template <typename InputMatrixType, typename ListType>
-  void analyzePatternBRA(const InputMatrixType &matrix, const ListType& variableList) {
+  void analyzePatternBRA(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
     if (m_symbolic) {
       NicsLU_Destroy(nicslu);
       // free(nicslu);
@@ -248,6 +251,8 @@ public:
       m_symbolic = 0;
       m_numeric = 0;
     }
+    m_dump = doDump;
+    m_scale = 1;
 
     grab(matrix.derived());
     this->changedEntries = variableList;
@@ -276,14 +281,11 @@ public:
    * \sa analyzePattern(), compute()
    */
   template <typename InputMatrixType, typename ListType>
-  void factorize_partial(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
+  void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
     eigen_assert(m_analysisIsOk &&
                  "NICSLU: you must first call analyzePattern()");
 
     grab(matrix.derived());
-    m_dump = doDump;
-    m_scale = 1;
-    nicslu->cfgi[9] = m_dump;
     this->changedEntries = variableList;
     factorize_with_path_impl();
   }
@@ -320,21 +322,6 @@ public:
     eigen_assert(m_factorizationIsOk &&
                  "NICSLU: you must first call factorize()");
     grab(matrix.derived());
-    // static int counter = 0;
-    // if (counter < 100)
-    // {
-    //   char str[32];
-    //   char counterstring[32];
-    //   sprintf(counterstring, "%d", counter);
-    //   strcpy(str, "A");
-    //   strcat(str, counterstring);
-    //   strcat(str, ".dense");
-    //   std::ofstream ofs(str);
-    //   ofs.precision(12);
-    //   counter++;
-    //   ofs << mp_matrix << std::endl;
-    //   ofs.close();
-    // }
     refactorize_impl();
   }
 
@@ -381,7 +368,7 @@ protected:
     m_symbolic = 0;
     m_is_first_partial = 1;
     m_extractedDataAreDirty = true;
-
+    m_dump = 0;
     nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
     NicsLU_Initialize(nicslu);
   }
@@ -403,7 +390,7 @@ protected:
         (unsigned int *)(mp_matrix.innerIndexPtr()),
         (unsigned int *)(mp_matrix.outerIndexPtr()));
 
-    //nicslu->cfgi[0] = 0;
+    nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = m_scale;
     nicslu->cfgi[9] = m_dump;
 
@@ -453,7 +440,7 @@ protected:
         (unsigned int *)(mp_matrix.innerIndexPtr()),
         (unsigned int *)(mp_matrix.outerIndexPtr()));
 
-    //nicslu->cfgi[0] = 0;
+    nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = m_scale;
     nicslu->cfgi[9] = m_dump;
 
@@ -509,36 +496,43 @@ protected:
         (unsigned int *)(mp_matrix.innerIndexPtr()),
         (unsigned int *)(mp_matrix.outerIndexPtr()));
 
-    //nicslu->cfgi[0] = 0;
+    nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = m_scale;
     nicslu->cfgi[9] = m_dump;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
     char *pivot_tolerance_env = getenv("NICSLU_PIVOT_TOLERANCE");
-    if (pivot_tolerance_env != NULL) {
+    if (pivot_tolerance_env != NULL) 
+    {
       double pivot_tolerance = atof(pivot_tolerance_env);
       if (pivot_tolerance > 0)
+      {
         nicslu->cfgf[31] = pivot_tolerance;
+      }
     }
     char *nicslu_do_mc64 = getenv("NICSLU_MC64");
-    if (nicslu_do_mc64 != NULL) {
+    if (nicslu_do_mc64 != NULL) 
+    {
       nicslu->cfgi[1] = atoi(nicslu_do_mc64);
     }
     char *nicslu_scale = getenv("NICSLU_SCALE");
-    if (nicslu_scale != NULL) {
+    if (nicslu_scale != NULL) 
+    {
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
 
     uint__t* varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
-    for(std::pair<UInt, UInt> i : changedEntries){
+    for(std::pair<UInt, UInt> i : changedEntries)
+    {
       varying[i.first] = 1;
       varying[i.second] = 1;
     }
     okAnalyze = NicsLU_Analyze_BRA(nicslu, varying);
     free(varying);
 
-    if (okCreate == 0 && okAnalyze == 0) {
+    if (okCreate == 0 && okAnalyze == 0) 
+    {
       m_symbolic = 1;
       m_isInitialized = true;
       m_info = Success;
@@ -689,9 +683,9 @@ protected:
       nicslu->start = nicslu->n;
       std::list<int> storage;
       for(std::pair<UInt, UInt> i : changedEntries){
-          if (nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
+          if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
           {
-            nicslu->start = nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
+            nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
           }
       }
 
