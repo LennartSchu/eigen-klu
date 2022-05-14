@@ -403,8 +403,9 @@ protected:
         (unsigned int *)(mp_matrix.innerIndexPtr()),
         (unsigned int *)(mp_matrix.outerIndexPtr()));
 
-    nicslu->cfgi[0] = 0;
-    nicslu->cfgi[1] = 1;
+    //nicslu->cfgi[0] = 0;
+    nicslu->cfgi[1] = m_scale;
+    nicslu->cfgi[9] = m_dump;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
