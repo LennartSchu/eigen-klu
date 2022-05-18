@@ -184,7 +184,7 @@ public:
    *
    * \sa factorize(), compute()
    */
-  template <typename InputMatrixType>
+  template <typename InputMatrixType, typename ListType>
   void analyzePattern(const InputMatrixType &matrix, const ListType& variableList, const int mode) {
     if (m_symbolic) {
       NicsLU_Destroy(nicslu);
