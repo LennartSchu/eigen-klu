@@ -185,7 +185,7 @@ public:
    * \sa factorize(), compute()
    */
   template <typename InputMatrixType>
-  void analyzePattern(const InputMatrixType &matrix) {
+  void analyzePattern(const InputMatrixType &matrix, const ListType& variableList, const int mode) {
     if (m_symbolic) {
       NicsLU_Destroy(nicslu);
       // free(nicslu);
@@ -196,67 +196,13 @@ public:
       m_numeric = 0;
     }
     m_scale = 1;
-    m_dump = 0;
+    m_mode = mode;
+    nicslu->cfgi[10] = m_mode;
+    this->changedEntries = variableList;
 
     grab(matrix.derived());
 
     analyzePattern_impl();
-  }
-
-
-  /** Performs a symbolic decomposition on the sparcity of \a matrix.
-   * Using Factorization path shortening
-   *
-   * This function is particularly useful when solving for several problems
-   * having the same structure.
-   *
-   * \sa factorize(), compute()
-   */
-  template <typename InputMatrixType, typename ListType>
-  void analyzePatternFP(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
-    if (m_symbolic) {
-      NicsLU_Destroy(nicslu);
-      // free(nicslu);
-      m_isInitialized = false;
-      nicslu = NULL;
-      nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
-      m_symbolic = 0;
-      m_numeric = 0;
-    }
-    m_dump = doDump;
-    m_scale = 1;
-
-    grab(matrix.derived());
-    this->changedEntries = variableList;
-    analyzePatternFP_impl();
-  }
-
-
-  /** Performs a symbolic decomposition on the sparcity of \a matrix.
-   * Using Bottom-Right-Arranging (BRA)
-   *
-   * This function is particularly useful when solving for several problems
-   * having the same structure.
-   *
-   * \sa factorize(), compute()
-   */
-  template <typename InputMatrixType, typename ListType>
-  void analyzePatternBRA(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
-    if (m_symbolic) {
-      NicsLU_Destroy(nicslu);
-      // free(nicslu);
-      m_isInitialized = false;
-      nicslu = NULL;
-      nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
-      m_symbolic = 0;
-      m_numeric = 0;
-    }
-    m_dump = doDump;
-    m_scale = 1;
-
-    grab(matrix.derived());
-    this->changedEntries = variableList;
-    analyzePatternBRA_impl();
   }
 
   /** Provides access to the control settings array used by NICSLU.
@@ -290,17 +236,6 @@ public:
     factorize_with_path_impl();
   }
 
-  template <typename InputMatrixType, typename ListType>
-  void factorize_fpartial(const InputMatrixType &matrix, const ListType& variableList) {
-    eigen_assert(m_analysisIsOk &&
-                 "NICSLU: you must first call analyzePattern()");
-
-    grab(matrix.derived());
-    this->changedEntries = variableList;
-    factorize_f_impl();
-  }
-
-
   /** Performs a numeric decomposition of \a matrix
    *
    * The given matrix must has the same sparcity than the matrix on which the
@@ -333,22 +268,6 @@ public:
     refactorize_partial_impl();
   }
 
-  template <typename InputMatrixType>
-  void refactorize_fpartial(const InputMatrixType &matrix) {
-    eigen_assert(m_factorizationIsOk &&
-                 "NICSLU: you must first call factorize()");
-    grab(matrix.derived());
-    refactorize_fpartial_impl();
-  }
-
-  template <typename InputMatrixType>
-  void refactorize_partialBRA(const InputMatrixType &matrix) {
-    eigen_assert(m_factorizationIsOk &&
-                 "NICSLU: you must first call factorize()");
-    grab(matrix.derived());
-    refactorize_partialBRA_impl();
-  }
-
   /** \internal */
   template <typename BDerived, typename XDerived>
   bool _solve_impl(const MatrixBase<BDerived> &b,
@@ -368,7 +287,6 @@ protected:
     m_symbolic = 0;
     m_is_first_partial = 1;
     m_extractedDataAreDirty = true;
-    m_dump = 0;
     nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
     NicsLU_Initialize(nicslu);
   }
@@ -392,7 +310,8 @@ protected:
 
     nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = m_scale;
-    nicslu->cfgi[9] = m_dump;
+    nicslu->cfgi[10] = m_mode;
+    //nicslu->cfgi[9] = m_dump;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
@@ -410,129 +329,19 @@ protected:
     if (nicslu_scale != NULL) {
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
-
-    okAnalyze = NicsLU_Analyze(nicslu);
-
-    if (okCreate == 0 && okAnalyze == 0) {
-      m_symbolic = 1;
-      m_isInitialized = true;
-      m_info = Success;
-      m_analysisIsOk = true;
-      m_extractedDataAreDirty = true;
-      m_is_first_partial = 1;
-    }
-  }
-
-  void analyzePatternFP_impl() {
-    m_info = InvalidInput;
-    m_analysisIsOk = false;
-    m_factorizationIsOk = false;
-    m_refactorizationIsOk = false;
-
-    int nnz = mp_matrix.nonZeros();
-    int okCreate, okAnalyze;
-    if (!m_isInitialized)
-      init();
-
-    okCreate = NicsLU_CreateMatrix(
-        nicslu, internal::convert_index<int>(mp_matrix.cols()), nnz,
-        const_cast<Scalar *>(mp_matrix.valuePtr()),
-        (unsigned int *)(mp_matrix.innerIndexPtr()),
-        (unsigned int *)(mp_matrix.outerIndexPtr()));
-
-    nicslu->cfgi[0] = 0;
-    nicslu->cfgi[1] = m_scale;
-    nicslu->cfgi[9] = m_dump;
-
-    // setting pivoting tolerance for refatorization
-    nicslu->cfgf[31] = 1e-8;
-    char *pivot_tolerance_env = getenv("NICSLU_PIVOT_TOLERANCE");
-    if (pivot_tolerance_env != NULL) {
-      double pivot_tolerance = atof(pivot_tolerance_env);
-      if (pivot_tolerance > 0)
-        nicslu->cfgf[31] = pivot_tolerance;
-    }
-    char *nicslu_do_mc64 = getenv("NICSLU_MC64");
-    if (nicslu_do_mc64 != NULL) {
-      nicslu->cfgi[1] = atoi(nicslu_do_mc64);
-    }
-    char *nicslu_scale = getenv("NICSLU_SCALE");
-    if (nicslu_scale != NULL) {
-      nicslu->cfgi[2] = atoi(nicslu_scale);
-    }
-
-    uint__t* varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
-    for(std::pair<UInt, UInt> i : changedEntries){
-      varying[i.first] = 1;
-      varying[i.second] = 1;
-    }
-    okAnalyze = NicsLU_Analyze_FP(nicslu, varying);
-    free(varying);
-
-    if (okCreate == 0 && okAnalyze == 0) {
-      m_symbolic = 1;
-      m_isInitialized = true;
-      m_info = Success;
-      m_analysisIsOk = true;
-      m_extractedDataAreDirty = true;
-      m_is_first_partial = 1;
-    }
-  }
-
-  void analyzePatternBRA_impl() {
-    m_info = InvalidInput;
-    m_analysisIsOk = false;
-    m_factorizationIsOk = false;
-    m_refactorizationIsOk = false;
-
-    int nnz = mp_matrix.nonZeros();
-    int okCreate, okAnalyze;
-    if (!m_isInitialized)
-      init();
-
-    okCreate = NicsLU_CreateMatrix(
-        nicslu, internal::convert_index<int>(mp_matrix.cols()), nnz,
-        const_cast<Scalar *>(mp_matrix.valuePtr()),
-        (unsigned int *)(mp_matrix.innerIndexPtr()),
-        (unsigned int *)(mp_matrix.outerIndexPtr()));
-
-    nicslu->cfgi[0] = 0;
-    nicslu->cfgi[1] = m_scale;
-    nicslu->cfgi[9] = m_dump;
-
-    // setting pivoting tolerance for refatorization
-    nicslu->cfgf[31] = 1e-8;
-    char *pivot_tolerance_env = getenv("NICSLU_PIVOT_TOLERANCE");
-    if (pivot_tolerance_env != NULL) 
+    uint__t* varying = NULL;
+    if(this->changedEntries.size() != 0)
     {
-      double pivot_tolerance = atof(pivot_tolerance_env);
-      if (pivot_tolerance > 0)
-      {
-        nicslu->cfgf[31] = pivot_tolerance;
+      varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
+      for(std::pair<UInt, UInt> i : changedEntries){
+        varying[i.first] = 1;
+        //varying[i.second] = 1;
       }
     }
-    char *nicslu_do_mc64 = getenv("NICSLU_MC64");
-    if (nicslu_do_mc64 != NULL) 
-    {
-      nicslu->cfgi[1] = atoi(nicslu_do_mc64);
-    }
-    char *nicslu_scale = getenv("NICSLU_SCALE");
-    if (nicslu_scale != NULL) 
-    {
-      nicslu->cfgi[2] = atoi(nicslu_scale);
-    }
+    okAnalyze = NicsLU_Analyze(nicslu, varying);
 
-    uint__t* varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
-    for(std::pair<UInt, UInt> i : changedEntries)
-    {
-      varying[i.first] = 1;
-      varying[i.second] = 1;
-    }
-    okAnalyze = NicsLU_Analyze_BRA(nicslu, varying);
     free(varying);
-
-    if (okCreate == 0 && okAnalyze == 0) 
-    {
+    if (okCreate == 0 && okAnalyze == 0) {
       m_symbolic = 1;
       m_isInitialized = true;
       m_info = Success;
@@ -561,47 +370,42 @@ protected:
     numOk = NicsLU_ResetMatrixValues(nicslu, Az);
     numOk = NicsLU_Factorize(nicslu);
 
-    //nicslu->changeVector = (uint__t*)calloc(changeLen, sizeof(uint__t));
-    // identify changed values
-    // changeVector == vector of changes in LU-matrix (i.e. including permutations)#
-    int counter = 0;
-    std::list<int> storage;
-    for(std::pair<UInt, UInt> i : changedEntries){
-        storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
-    }
-    storage.sort();
-    storage.unique();
-    uint__t changeVectorLen = storage.size();
-    uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-    for(auto i : storage)
+    if(nicslu->cfgi[10] != 2)
     {
-      changeVector[counter] = i;
-      counter++;
+      // mode: 0 or 1: factorization path!
+
+      // identify changed values
+      // changeVector == vector of changes in LU-matrix (i.e. including permutations)#
+      int counter = 0;
+      std::list<int> storage;
+      for(std::pair<UInt, UInt> i : changedEntries){
+          storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
+      }
+      storage.sort();
+      storage.unique();
+      uint__t changeVectorLen = storage.size();
+      uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+      for(auto i : storage)
+      {
+        changeVector[counter] = i;
+        counter++;
+      }
+
+      NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
+      free(changeVector);
     }
-
-    NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
-    free(changeVector);
-
-    m_info = numOk == 0 ? Success : NumericalIssue;
-    m_factorizationIsOk = numOk == 0 ? 1 : 0;
-    m_numeric = numOk == 0 ? 1 : 0;
-    m_extractedDataAreDirty = true;
-    m_is_first_partial = 1;
-  }
-
-  void factorize_f_impl() {
-    int numOk;
-    Scalar* Az = const_cast<Scalar *>(mp_matrix.valuePtr());
-    numOk = NicsLU_ResetMatrixValues(nicslu, Az);
-    numOk = NicsLU_Factorize(nicslu);
-
-    nicslu->start = nicslu->n;
-    std::list<int> storage;
-    for(std::pair<UInt, UInt> i : changedEntries){
-        if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
-        {
-          nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
-        }
+    else
+    {
+      // cfgi[10] == 2
+      // bottom right arranging
+      // identify first varying entry
+      nicslu->start = nicslu->n;
+      for(std::pair<UInt, UInt> i : changedEntries){
+          if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
+          {
+            nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
+          }
+      }
     }
 
     m_info = numOk == 0 ? Success : NumericalIssue;
@@ -619,91 +423,85 @@ protected:
         "must first call either compute() or analyzePattern()/factorize()");
     int numOk;
 
-    // check if something went terribly wrong...
-    if (mp_matrix.nonZeros() != nicslu->nnz) {
-      analyzePattern_impl();
-      numOk = NicsLU_Factorize(nicslu);
+    if(nicslu->cfgi[10] != 2)
+    {
+      // factorization path mode
 
-      // identify changed values
-      // changeVector == vector of changes in LU-matrix (i.e. including permutations)
-      int counter = 0;
-      std::list<int> storage;
-      for(std::pair<UInt, UInt> i : changedEntries){
-          storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
-      }
-      storage.sort();
-      storage.unique();
-      uint__t changeVectorLen = storage.size();
-      uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-      for(auto i : storage)
-      {
-        changeVector[counter] = i;
-        counter++;
-      }
-      NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
-      free(changeVector);
-
-      m_factorizationIsOk = numOk == 0 ? 1 : 0;
-    } else {
-      // get new matrix values
-      Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
-
-      // Refactorize with new values
-      numOk = NicsLU_PartialReFactorize(nicslu, Ax);
-
-      // check whether a pivot became too large or too small
-      if (numOk == NICSLU_NUMERIC_OVERFLOW) {
-        // if so, reset matrix values and re-do computation
-        // only needs to Reset Matrix Values, if analyze_pattern is not called
-        numOk = NicsLU_ResetMatrixValues(nicslu, Ax);
+      // check if something went terribly wrong...
+      if (mp_matrix.nonZeros() != nicslu->nnz) {
+        analyzePattern_impl();
         numOk = NicsLU_Factorize(nicslu);
+
+        // identify changed values
+        // changeVector == vector of changes in LU-matrix (i.e. including permutations)
+        int counter = 0;
+        std::list<int> storage;
+        for(std::pair<UInt, UInt> i : changedEntries){
+            storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
+        }
+        storage.sort();
+        storage.unique();
+        uint__t changeVectorLen = storage.size();
+        uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+        for(auto i : storage)
+        {
+          changeVector[counter] = i;
+          counter++;
+        }
+        NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
+        free(changeVector);
+
         m_factorizationIsOk = numOk == 0 ? 1 : 0;
+      } else {
+        // get new matrix values
+        Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
+
+        // Refactorize with new values
+        numOk = NicsLU_PartialReFactorize(nicslu, Ax);
+
+        // check whether a pivot became too large or too small
+        if (numOk == NICSLU_NUMERIC_OVERFLOW) {
+          // if so, reset matrix values and re-do computation
+          // only needs to Reset Matrix Values, if analyze_pattern is not called
+          numOk = NicsLU_ResetMatrixValues(nicslu, Ax);
+          numOk = NicsLU_Factorize(nicslu);
+          m_factorizationIsOk = numOk == 0 ? 1 : 0;
+        }
       }
     }
-    m_info = numOk == 0 ? Success : NumericalIssue;
-    m_refactorizationIsOk = numOk == 0 ? 1 : 0;
-    m_numeric = numOk == 0 ? 1 : 0;
-    m_extractedDataAreDirty = true;
-  }
+    else
+    {
+      // bottom right arranging mode
 
-  void refactorize_fpartial_impl(){
-    // Make sure that NicsLU_Factorize was called before this!
-    eigen_assert(
-        m_factorizationIsOk &&
-        "The decomposition is not in a valid state for refactorization, you "
-        "must first call either compute() or analyzePattern()/factorize()");
-    int numOk;
-
-    // check if something went terribly wrong...
-    if (mp_matrix.nonZeros() != nicslu->nnz) {
-      analyzePattern_impl();
-      numOk = NicsLU_Factorize(nicslu);
-
-      // find first varying entry
-      nicslu->start = nicslu->n;
-      std::list<int> storage;
-      for(std::pair<UInt, UInt> i : changedEntries){
-          if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
-          {
-            nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
-          }
-      }
-
-      m_factorizationIsOk = numOk == 0 ? 1 : 0;
-    } else {
-      // get new matrix values
-      Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
-
-      // Refactorize with new values
-      numOk = NicsLU_FPartialReFactorize(nicslu, Ax);
-
-      // check whether a pivot became too large or too small
-      if (numOk == NICSLU_NUMERIC_OVERFLOW) {
-        // if so, reset matrix values and re-do computation
-        // only needs to Reset Matrix Values, if analyze_pattern is not called
-        numOk = NicsLU_ResetMatrixValues(nicslu, Ax);
+      // check if something went terribly wrong...
+      if (mp_matrix.nonZeros() != nicslu->nnz) {
+        analyzePattern_impl();
         numOk = NicsLU_Factorize(nicslu);
+
+        // identify first varying entry
+        nicslu->start = nicslu->n;
+        for(std::pair<UInt, UInt> i : changedEntries){
+            if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
+            {
+              nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
+            }
+        }
         m_factorizationIsOk = numOk == 0 ? 1 : 0;
+      } else {
+        // get new matrix values
+        Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
+
+        // Refactorize with new values
+        numOk = NicsLU_FPartialReFactorize(nicslu, Ax);
+
+        // check whether a pivot became too large or too small
+        if (numOk == NICSLU_NUMERIC_OVERFLOW) {
+          // if so, reset matrix values and re-do computation
+          // only needs to Reset Matrix Values, if analyze_pattern is not called
+          numOk = NicsLU_ResetMatrixValues(nicslu, Ax);
+          numOk = NicsLU_Factorize(nicslu);
+          m_factorizationIsOk = numOk == 0 ? 1 : 0;
+        }
       }
     }
     m_info = numOk == 0 ? Success : NumericalIssue;
@@ -732,42 +530,6 @@ protected:
 
       // Refactorize with new values
       numOk = NicsLU_ReFactorize(nicslu, Ax);
-
-      // check whether a pivot became too large or too small
-      if (numOk == NICSLU_NUMERIC_OVERFLOW) {
-        // if so, reset matrix values and re-do computation
-        // only needs to Reset Matrix Values, if analyze_pattern is not called
-        numOk = NicsLU_ResetMatrixValues(nicslu, Ax);
-        numOk = NicsLU_Factorize(nicslu);
-        m_factorizationIsOk = numOk == 0 ? 1 : 0;
-      }
-    }
-    m_info = numOk == 0 ? Success : NumericalIssue;
-    m_refactorizationIsOk = numOk == 0 ? 1 : 0;
-    m_numeric = numOk == 0 ? 1 : 0;
-    m_extractedDataAreDirty = true;
-  }
-
-  void refactorize_partialBRA_impl() {
-    // Make sure that NicsLU_Factorize was called before this!
-    eigen_assert(
-        m_factorizationIsOk &&
-        "The decomposition is not in a valid state for refactorization, you "
-        "must first call either compute() or analyzePattern()/factorize()");
-    int numOk;
-
-    // check if something went terribly wrong...
-    if (mp_matrix.nonZeros() != nicslu->nnz) {
-      analyzePatternBRA_impl();
-      numOk = NicsLU_Factorize(nicslu);
-      m_is_first_partial = 1;
-      m_factorizationIsOk = numOk == 0 ? 1 : 0;
-    } else {
-      // get new matrix values
-      Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
-
-      // Refactorize with new values
-      numOk = NicsLU_FPartialReFactorize(nicslu, Ax);
 
       // check whether a pivot became too large or too small
       if (numOk == NICSLU_NUMERIC_OVERFLOW) {
@@ -817,8 +579,14 @@ protected:
   int m_symbolic;
   int m_numeric;
   int m_is_first_partial;
-  int m_dump;
+  // do scaling?
   int m_scale;
+  /* which permutation mode?
+  * 0: normal AMD
+  * 1: factorization path shortening
+  * 2: bottom-right arranging
+  */
+  int m_mode;
 
 private:
   //    NICSLU(const NICSLU& ) { }
