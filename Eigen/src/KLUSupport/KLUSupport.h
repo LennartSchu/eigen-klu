@@ -174,6 +174,24 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     }
 
 
+    /** Performs a symbolic decomposition on the sparcity of \a matrix.
+      *
+      * This function is particularly useful when solving for several problems having the same structure.
+      *
+      * \sa factorize(), compute()
+      */
+    template<typename InputMatrixType, typename ListType>
+    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& variableList, const int mode)
+    {
+      if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
+      if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
+
+      grab(matrix.derived());
+      this->changedEntries = variableList;
+      analyzePattern_impl();
+    }
+
+
     /** Provides access to the control settings array used by KLU.
       *
       * See KLU documentation for details.
@@ -202,10 +220,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
      * \sa analyzePattern(), compute()
      */
     template <typename InputMatrixType, typename ListType>
-    void factorize_partial(const InputMatrixType &matrix, const ListType& variableList, const int doDump) {
+    void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
       /* there's only dumping if fact.path is computed */
-      m_dump = doDump;
+      m_dump = 0;
       m_common.dump = m_dump;
       grab(matrix.derived());
       this->changedEntries = variableList;

@@ -184,8 +184,34 @@ public:
    *
    * \sa factorize(), compute()
    */
+  template <typename InputMatrixType>
+  void analyzePattern(const InputMatrixType &matrix) {
+    if (m_symbolic) {
+      NicsLU_Destroy(nicslu);
+      // free(nicslu);
+      m_isInitialized = false;
+      nicslu = NULL;
+      nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
+      m_symbolic = 0;
+      m_numeric = 0;
+    }
+    m_scale = 1;
+    nicslu->cfgi[10] = 0;
+
+    grab(matrix.derived());
+
+    analyzePattern_impl();
+  }
+
+  /** Performs a symbolic decomposition on the sparcity of \a matrix.
+   *
+   * This function is particularly useful when solving for several problems
+   * having the same structure.
+   *
+   * \sa factorize(), compute()
+   */
   template <typename InputMatrixType, typename ListType>
-  void analyzePattern(const InputMatrixType &matrix, const ListType& variableList, const int mode) {
+  void analyzePatternPartial(const InputMatrixType &matrix, const ListType& variableList, const int mode) {
     if (m_symbolic) {
       NicsLU_Destroy(nicslu);
       // free(nicslu);
@@ -197,7 +223,6 @@ public:
     }
     m_scale = 1;
     m_mode = mode;
-    nicslu->cfgi[10] = m_mode;
     this->changedEntries = variableList;
 
     grab(matrix.derived());
