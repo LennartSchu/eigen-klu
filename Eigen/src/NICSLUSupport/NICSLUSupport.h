@@ -196,7 +196,6 @@ public:
       m_numeric = 0;
     }
     m_scale = 1;
-    nicslu->cfgi[10] = 0;
 
     grab(matrix.derived());
 
