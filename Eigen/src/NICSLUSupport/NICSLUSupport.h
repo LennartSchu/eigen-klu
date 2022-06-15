@@ -335,7 +335,6 @@ protected:
     nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = m_scale;
     nicslu->cfgi[10] = m_mode;
-    //nicslu->cfgi[9] = m_dump;
 
     // setting pivoting tolerance for refatorization
     nicslu->cfgf[31] = 1e-8;
@@ -359,7 +358,6 @@ protected:
       varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
       for(std::pair<UInt, UInt> i : changedEntries){
         varying[i.first] = 1;
-        //varying[i.second] = 1;
       }
     }
     okAnalyze = NicsLU_Analyze(nicslu, varying);
@@ -399,7 +397,7 @@ protected:
       // mode: 0 or 1: factorization path!
 
       // identify changed values
-      // changeVector == vector of changes in LU-matrix (i.e. including permutations)#
+      // changeVector == vector of changes in LU-matrix (i.e. including permutations)
       int counter = 0;
       std::list<int> storage;
       for(std::pair<UInt, UInt> i : changedEntries){
@@ -447,7 +445,7 @@ protected:
         "must first call either compute() or analyzePattern()/factorize()");
     int numOk;
 
-    if(nicslu->cfgi[10] != 2)
+    if(nicslu->cfgi[10] == 0 || nicslu->cfgi[10] == 1)
     {
       // factorization path mode
 
@@ -476,7 +474,7 @@ protected:
         free(changeVector);
 
         m_factorizationIsOk = numOk == 0 ? 1 : 0;
-      } else {
+      } else { 
         // get new matrix values
         Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
 
@@ -495,7 +493,9 @@ protected:
     }
     else
     {
-      // bottom right arranging mode
+      /* restarting partial refactorisation
+        * either BRA or AMD ordering ("canadian method")
+      */
 
       // check if something went terribly wrong...
       if (mp_matrix.nonZeros() != nicslu->nnz) {
