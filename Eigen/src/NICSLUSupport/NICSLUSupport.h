@@ -392,9 +392,16 @@ protected:
     numOk = NicsLU_ResetMatrixValues(nicslu, Az);
     numOk = NicsLU_Factorize(nicslu);
 
-    if(nicslu->cfgi[10] != 2)
+    /* Explanation for modes: nicslu->cfgi[10] = mode
+     * mode 0: partial refact. with amd ordering (factorization path)
+     * mode 1: partial refact. with specialized ordering (factorization path)
+     * mode 2: partial refact. with bottom-right-arranging (restarting)
+     * mode 3: restarting partial refact. (aka "canadian method") (restarting)
+     */
+
+    if(nicslu->cfgi[10] == 0 || nicslu->cfgi[10] == 1)
     {
-      // mode: 0 or 1: factorization path!
+      // factorization path required here
 
       // identify changed values
       // changeVector == vector of changes in LU-matrix (i.e. including permutations)
@@ -418,9 +425,7 @@ protected:
     }
     else
     {
-      // cfgi[10] == 2
-      // bottom right arranging
-      // identify first varying entry
+      // identify first varying entry to restart part. refactorisation from
       nicslu->start = nicslu->n;
       for(std::pair<UInt, UInt> i : changedEntries){
           if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
@@ -493,8 +498,9 @@ protected:
     }
     else
     {
-      /* restarting partial refactorisation
-        * either BRA or AMD ordering ("canadian method")
+      /* 
+        restarting partial refactorisation
+        either BRA or AMD ordering ("canadian method")
       */
 
       // check if something went terribly wrong...
