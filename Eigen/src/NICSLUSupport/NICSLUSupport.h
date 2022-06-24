@@ -538,6 +538,9 @@ protected:
     m_refactorizationIsOk = numOk == 0 ? 1 : 0;
     m_numeric = numOk == 0 ? 1 : 0;
     m_extractedDataAreDirty = true;
+    eigen_assert(
+        m_factorizationIsOk &&
+        "The decomposition is not in a valid state for refactorization");
   }
 
   void refactorize_impl() {
