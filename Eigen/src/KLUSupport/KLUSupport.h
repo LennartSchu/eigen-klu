@@ -163,7 +163,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       * \sa factorize(), compute()
       */
     template<typename InputMatrixType, typename ListType>
-    void analyzePattern(const InputMatrixType& matrix const ListType& variableList, const int mode)
+    void analyzePattern(const InputMatrixType& matrix, const ListType& variableList, const int mode)
     {
       if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
       if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
