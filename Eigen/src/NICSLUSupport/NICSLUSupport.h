@@ -352,17 +352,24 @@ protected:
     if (nicslu_scale != NULL) {
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
-    uint__t* varying = NULL;
+    uint__t* varyingr = NULL;
+    uint__t* varyingc = NULL;
     if(this->changedEntries.size() != 0)
     {
-      varying = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
+      varyingr = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
+      varyingc = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
       for(std::pair<UInt, UInt> i : changedEntries){
-        varying[i.first] = 1;
+        varyingr[i.first] = 1;
+        varyingc[i.second] = 1;
       }
     }
-    okAnalyze = NicsLU_Analyze(nicslu, varying);
+    okAnalyze = NicsLU_Analyze(nicslu, varyingr, varyingc);
 
-    free(varying);
+    if(varyingr)
+      free(varyingr);
+    if(varyingc)
+      free(varyingc);
+
     if (okCreate == 0 && okAnalyze == 0) {
       m_symbolic = 1;
       m_isInitialized = true;
@@ -405,34 +412,37 @@ protected:
 
       // identify changed values
       // changeVector == vector of changes in LU-matrix (i.e. including permutations)
+
       int counter = 0;
-      std::list<int> storage;
-      for(std::pair<UInt, UInt> i : changedEntries){
-          storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
-      }
-      storage.sort();
-      storage.unique();
-      uint__t changeVectorLen = storage.size();
-      uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-      for(auto i : storage)
+      uint__t changeVectorLen = changedEntries.size();
+      uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+      uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+      for(std::pair<UInt, UInt> i : changedEntries)
       {
-        changeVector[counter] = i;
+        changeVector_r[counter] = i.first;
+        changeVector_c[counter] = i.second;
         counter++;
       }
 
-      NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
+      NicsLU_compute_path(nicslu, changeVector_r, changeVector_c, changeVectorLen);
       free(changeVector);
     }
     else
     {
-      // identify first varying entry to restart part. refactorisation from
-      nicslu->start = nicslu->n;
-      for(std::pair<UInt, UInt> i : changedEntries){
-          if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
-          {
-            nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
-          }
-      }
+        // identify first varying entry to restart part. refactorisation from
+        int counter = 0;
+        uint__t changeVectorLen = changedEntries.size();
+        uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+        uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+        for(std::pair<UInt, UInt> i : changedEntries)
+        {
+          changeVector_r[counter] = i.first;
+          changeVector_c[counter] = i.second;
+          counter++;
+        }
+        NicsLU_RefactorizationRestart(nicslu, changeVector_r, changeVector_c, changeVectorLen);
+        free(changeVector_r);
+        free(changeVector_c);
     }
 
     m_info = numOk == 0 ? Success : NumericalIssue;
@@ -462,22 +472,19 @@ protected:
         // identify changed values
         // changeVector == vector of changes in LU-matrix (i.e. including permutations)
         int counter = 0;
-        std::list<int> storage;
-        for(std::pair<UInt, UInt> i : changedEntries){
-            storage.push_back(nicslu->pivot_inv[nicslu->row_perm_inv[i.first]]);
-        }
-        storage.sort();
-        storage.unique();
-        uint__t changeVectorLen = storage.size();
-        uint__t* changeVector = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-        for(auto i : storage)
+        uint__t changeVectorLen = changedEntries.size();
+        uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+        uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+        for(std::pair<UInt, UInt> i : changedEntries)
         {
-          changeVector[counter] = i;
+          changeVector_r[counter] = i.first;
+          changeVector_c[counter] = i.second;
           counter++;
         }
-        NicsLU_compute_path(nicslu, changeVector, changeVectorLen);
-        free(changeVector);
 
+        NicsLU_compute_path(nicslu, changeVector_r, changeVector_c, changeVectorLen);
+        free(changeVector_r);
+        free(changeVector_c);
         m_factorizationIsOk = numOk == 0 ? 1 : 0;
       } else { 
         // get new matrix values
@@ -507,15 +514,19 @@ protected:
       if (mp_matrix.nonZeros() != nicslu->nnz) {
         analyzePattern_impl();
         numOk = NicsLU_Factorize(nicslu);
-
-        // identify first varying entry
-        nicslu->start = nicslu->n;
-        for(std::pair<UInt, UInt> i : changedEntries){
-            if ((uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]] < nicslu->start)
-            {
-              nicslu->start = (uint__t)nicslu->pivot_inv[nicslu->row_perm_inv[i.first]];
-            }
+        int counter = 0;
+        uint__t changeVectorLen = changedEntries.size();
+        uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+        uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
+        for(std::pair<UInt, UInt> i : changedEntries)
+        {
+          changeVector_r[counter] = i.first;
+          changeVector_c[counter] = i.second;
+          counter++;
         }
+        NicsLU_RefactorizationRestart(nicslu, changeVector_r, changeVector_c, changeVectorLen);
+        free(changeVector_r);
+        free(changeVector_c);
         m_factorizationIsOk = numOk == 0 ? 1 : 0;
       } else {
         // get new matrix values
