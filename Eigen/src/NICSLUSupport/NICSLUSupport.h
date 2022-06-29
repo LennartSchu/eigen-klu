@@ -249,13 +249,12 @@ public:
    *
    * \sa analyzePattern(), compute()
    */
-  template <typename InputMatrixType, typename ListType>
-  void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
+  template <typename InputMatrixType>
+  void factorize_partial(const InputMatrixType &matrix) {
     eigen_assert(m_analysisIsOk &&
                  "NICSLU: you must first call analyzePattern()");
 
     grab(matrix.derived());
-    this->changedEntries = variableList;
     factorize_with_path_impl();
   }
 
