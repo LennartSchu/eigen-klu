@@ -213,7 +213,6 @@ public:
   void analyzePatternPartial(const InputMatrixType &matrix, const ListType& variableList, const int mode) {
     if (m_symbolic) {
       NicsLU_Destroy(nicslu);
-      // free(nicslu);
       m_isInitialized = false;
       nicslu = NULL;
       nicslu = (SNicsLU *)malloc(sizeof(SNicsLU));
@@ -326,17 +325,21 @@ protected:
     if (!m_isInitialized)
       init();
 
+    /* TODO: do dumping of A here, if desired */
+    /* assemble matrix here */
     okCreate = NicsLU_CreateMatrix(
         nicslu, internal::convert_index<int>(mp_matrix.cols()), nnz,
         const_cast<Scalar *>(mp_matrix.valuePtr()),
         (unsigned int *)(mp_matrix.innerIndexPtr()),
         (unsigned int *)(mp_matrix.outerIndexPtr()));
 
+    /* here: NICSLU parameters are set */
+    /* scaling modes, etc. */
     nicslu->cfgi[0] = 0;
     nicslu->cfgi[1] = m_scale;
     nicslu->cfgi[10] = m_mode;
 
-    // setting pivoting tolerance for refatorization
+    /* setting pivoting tolerance for refatorization */
     nicslu->cfgf[31] = 1e-8;
     char *pivot_tolerance_env = getenv("NICSLU_PIVOT_TOLERANCE");
     if (pivot_tolerance_env != NULL) {
@@ -352,18 +355,22 @@ protected:
     if (nicslu_scale != NULL) {
       nicslu->cfgi[2] = atoi(nicslu_scale);
     }
+    /* get both varying column and row entries, in case we want to do bra */
     uint__t* varyingr = NULL;
     uint__t* varyingc = NULL;
-    if(this->changedEntries.size() != 0)
+    uint__t numberOfVaryingEntries = this->changedEntries.size();
+    if(numberOfVaryingEntries != 0)
     {
-      varyingr = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
-      varyingc = (uint__t*)calloc(nicslu->n, sizeof(uint__t));
+      varyingr = (uint__t*)calloc(numberOfVaryingEntries, sizeof(uint__t));
+      varyingc = (uint__t*)calloc(numberOfVaryingEntries, sizeof(uint__t));
+      uint__t counter = 0;
       for(std::pair<UInt, UInt> i : changedEntries){
-        varyingr[i.first] = 1;
-        varyingc[i.second] = 1;
+        varyingr[counter] = i.first;
+        varyingc[counter] = i.second;
+        counter++;
       }
     }
-    okAnalyze = NicsLU_Analyze(nicslu, varyingr, varyingc);
+    okAnalyze = NicsLU_Analyze(nicslu, varyingr, varyingc, numberOfVaryingEntries);
 
     if(varyingr)
       free(varyingr);
@@ -401,48 +408,21 @@ protected:
 
     /* Explanation for modes: nicslu->cfgi[10] = mode
      * mode 0: partial refact. with amd ordering (factorization path)
-     * mode 1: partial refact. with specialized ordering (factorization path)
+     * mode 1: partial refact. with specialized ordering (factorization path - MD-NV)
      * mode 2: partial refact. with bottom-right-arranging (restarting)
      * mode 3: restarting partial refact. (aka "canadian method") (restarting)
      */
 
     if(nicslu->cfgi[10] == 0 || nicslu->cfgi[10] == 1)
     {
-      // factorization path required here
-
-      // identify changed values
-      // changeVector == vector of changes in LU-matrix (i.e. including permutations)
-
-      int counter = 0;
-      uint__t changeVectorLen = changedEntries.size();
-      uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-      uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-      for(std::pair<UInt, UInt> i : changedEntries)
-      {
-        changeVector_r[counter] = i.first;
-        changeVector_c[counter] = i.second;
-        counter++;
-      }
-
-      NicsLU_compute_path(nicslu, changeVector_r, changeVector_c, changeVectorLen);
-      free(changeVector);
+      /* factorization path required here */
+      NicsLU_compute_path(nicslu);
     }
     else
     {
-        // identify first varying entry to restart part. refactorisation from
-        int counter = 0;
-        uint__t changeVectorLen = changedEntries.size();
-        uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-        uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-        for(std::pair<UInt, UInt> i : changedEntries)
-        {
-          changeVector_r[counter] = i.first;
-          changeVector_c[counter] = i.second;
-          counter++;
-        }
-        NicsLU_RefactorizationRestart(nicslu, changeVector_r, changeVector_c, changeVectorLen);
-        free(changeVector_r);
-        free(changeVector_c);
+      /* no factorization path required, doing refactorization restart */
+      /* this function essentially tells NICSLU where to restart the refactorization */
+      NicsLU_RefactorizationRestart(nicslu);
     }
 
     m_info = numOk == 0 ? Success : NumericalIssue;
@@ -462,41 +442,31 @@ protected:
 
     if(nicslu->cfgi[10] == 0 || nicslu->cfgi[10] == 1)
     {
-      // factorization path mode
+      /* factorization path mode */
 
-      // check if something went terribly wrong...
+      /* check if something went terribly wrong... 
+       * this is necessary if the user factorises a matrix with 
+       * a different nnz pattern without calling the destructror 
+       * of this class. Then, the old orderings and factorizations
+       * are still in the memory. */
       if (mp_matrix.nonZeros() != nicslu->nnz) {
+        /* re-do everything... */
         analyzePattern_impl();
         numOk = NicsLU_Factorize(nicslu);
-
-        // identify changed values
-        // changeVector == vector of changes in LU-matrix (i.e. including permutations)
-        int counter = 0;
-        uint__t changeVectorLen = changedEntries.size();
-        uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-        uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-        for(std::pair<UInt, UInt> i : changedEntries)
-        {
-          changeVector_r[counter] = i.first;
-          changeVector_c[counter] = i.second;
-          counter++;
-        }
-
-        NicsLU_compute_path(nicslu, changeVector_r, changeVector_c, changeVectorLen);
-        free(changeVector_r);
-        free(changeVector_c);
+        NicsLU_compute_path(nicslu);
         m_factorizationIsOk = numOk == 0 ? 1 : 0;
       } else { 
-        // get new matrix values
+        /* get new matrix values */
         Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
 
-        // Refactorize with new values
+        /* Refactorize partially with new values */
         numOk = NicsLU_PartialReFactorize(nicslu, Ax);
 
-        // check whether a pivot became too large or too small
+        /* check whether a pivot became too large or too small */
         if (numOk == NICSLU_NUMERIC_OVERFLOW) {
-          // if so, reset matrix values and re-do computation
-          // only needs to Reset Matrix Values, if analyze_pattern is not called
+          /* if so, reset matrix values and re-do factorization
+           * only needs to Reset Matrix Values, if analyze_pattern is not called
+           */
           numOk = NicsLU_ResetMatrixValues(nicslu, Ax);
           numOk = NicsLU_Factorize(nicslu);
           m_factorizationIsOk = numOk == 0 ? 1 : 0;
@@ -512,21 +482,10 @@ protected:
 
       // check if something went terribly wrong...
       if (mp_matrix.nonZeros() != nicslu->nnz) {
+        /*  */
         analyzePattern_impl();
         numOk = NicsLU_Factorize(nicslu);
-        int counter = 0;
-        uint__t changeVectorLen = changedEntries.size();
-        uint__t* changeVector_r = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-        uint__t* changeVector_c = (uint__t*)calloc(changeVectorLen, sizeof(uint__t));
-        for(std::pair<UInt, UInt> i : changedEntries)
-        {
-          changeVector_r[counter] = i.first;
-          changeVector_c[counter] = i.second;
-          counter++;
-        }
-        NicsLU_RefactorizationRestart(nicslu, changeVector_r, changeVector_c, changeVectorLen);
-        free(changeVector_r);
-        free(changeVector_c);
+        NicsLU_RefactorizationRestart(nicslu);
         m_factorizationIsOk = numOk == 0 ? 1 : 0;
       } else {
         // get new matrix values
