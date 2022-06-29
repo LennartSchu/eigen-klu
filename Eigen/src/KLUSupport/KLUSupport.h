@@ -163,8 +163,26 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       * \sa factorize(), compute()
       */
     template<typename InputMatrixType, typename ListType>
-    void analyzePattern(const InputMatrixType& matrix, const ListType& variableList, const int mode)
+    void analyzePattern(const InputMatrixType& matrix)
     {
+      if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
+      if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
+
+      grab(matrix.derived());
+
+      analyzePattern_impl();
+    }
+
+    /** Performs a symbolic decomposition on the sparcity of \a matrix.
+      *
+      * This function is particularly useful when solving for several problems having the same structure.
+      *
+      * \sa factorize(), compute()
+      */
+    template<typename InputMatrixType, typename ListType>
+    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& variableList, const int mode)
+    {
+      /* needed in case we want to do partial refactorization orderings in KLU too */
       if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
       if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
 
@@ -348,7 +366,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     void factorize_with_path_impl() {
       m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, &m_common, Scalar());
-
+      /* for now, we're doing it like this 
+       * but this should be changed to be more like
+       * NICSLU's implementation (i.e. store the variable entries in m_common)
+       */
       int changeLen = changedEntries.size();
       int *changeVector = (int*)calloc(sizeof(int), changeLen);
       int counter = 0;
