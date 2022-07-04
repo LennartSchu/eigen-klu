@@ -10,7 +10,9 @@
 
 #ifndef EIGEN_NICSLUSUPPORT_H
 #define EIGEN_NICSLUSUPPORT_H
-#include <list>
+#ifdef EIGEN_DUMP
+#include <fstream>
+#endif
 
 namespace Eigen {
 
@@ -57,7 +59,7 @@ public:
   typedef typename MatrixType::StorageIndex StorageIndex;
   typedef Matrix<Scalar, Dynamic, 1> Vector;
 
-  typedef SparseMatrix<Scalar, RowMajor, int> NICSLUMatrixType;
+  typedef SparseMatrix<Scalar, ColMajor, int> NICSLUMatrixType;
   typedef Matrix<int, 1, MatrixType::ColsAtCompileTime> IntRowVectorType;
   typedef Matrix<int, MatrixType::RowsAtCompileTime, 1> IntColVectorType;
 
@@ -300,7 +302,38 @@ public:
 
     void extractData() const;
 #endif
+#ifdef EIGEN_DUMP
+    template<typename InputMatrixType>
+    void printMTX(const InputMatrixType& matrix, int counter)
+    {
+	int i, j;
+	int n = internal::convert_index<int>(matrix.rows());
 
+ 	StorageIndex* Ap = const_cast<StorageIndex*>(matrix.outerIndexPtr());
+	StorageIndex* Ai = const_cast<StorageIndex*>(matrix.innerIndexPtr()); 
+	Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
+	int nz = matrix.nonZeros();
+
+	std::ofstream ofs;
+	char strA[32];
+	char counterstring[32];
+	sprintf(counterstring, "%d", counter);
+	strcpy(strA, "A");
+	strcat(strA, counterstring);
+	strcat(strA, ".mtx");
+	ofs.open(strA);
+	ofs << "%%MatrixMarket matrix coordinate real general" << std::endl;
+	ofs << n << " " << n << " " << nz << std::endl;
+	for(i = 0 ; i < n ; i++)
+	{
+		for(j = Ap[i] ; j < Ap[i+1] ; j++)
+		{
+			ofs << i+1 << " " << Ai[j]+1 << " " << Ax[j] << std::endl;
+		}
+	}
+	ofs.close();
+    }
+#endif
 protected:
   void init() {
     m_info = InvalidInput;
@@ -324,7 +357,6 @@ protected:
     if (!m_isInitialized)
       init();
 
-    /* TODO: do dumping of A here, if desired */
     /* assemble matrix here */
     okCreate = NicsLU_CreateMatrix(
         nicslu, internal::convert_index<int>(mp_matrix.cols()), nnz,
@@ -334,7 +366,7 @@ protected:
 
     /* here: NICSLU parameters are set */
     /* scaling modes, etc. */
-    nicslu->cfgi[0] = 0;
+    nicslu->cfgi[0] = 1;
     nicslu->cfgi[1] = m_scale;
     nicslu->cfgi[10] = m_mode;
 
@@ -438,6 +470,14 @@ protected:
         "The decomposition is not in a valid state for refactorization, you "
         "must first call either compute() or analyzePattern()/factorize()");
     int numOk;
+#ifdef EIGEN_DUMP
+	static int counter = 1;
+	if(counter == 1 || counter == m_limit)
+	{
+		printMTX(mp_matrix, counter);	
+	}
+	counter++;
+#endif
 
     if(nicslu->cfgi[10] == 0 || nicslu->cfgi[10] == 1)
     {
@@ -587,8 +627,10 @@ protected:
   * 0: normal AMD
   * 1: factorization path shortening
   * 2: bottom-right arranging
+  * 3: partial refactorisation by refactorisation restart
   */
   int m_mode;
+  int m_limit;
 
 private:
   //    NICSLU(const NICSLU& ) { }

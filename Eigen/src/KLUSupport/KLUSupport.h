@@ -9,6 +9,9 @@
 
 #ifndef EIGEN_KLUSUPPORT_H
 #define EIGEN_KLUSUPPORT_H
+#ifdef EIGEN_DUMP
+#include <fstream>
+#endif
 
 namespace Eigen {
 
@@ -172,7 +175,23 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
       analyzePattern_impl();
     }
+   
+    /** Performs a symbolic decomposition on the sparcity of \a matrix.
+      *
+      * This function is particularly useful when solving for several problems having the same structure.
+      *
+      * \sa factorize(), compute()
+      */
+    template<typename InputMatrixType, typename ListType>
+    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& list, const int mode)
+    {
+      if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
+      if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
 
+      grab(matrix.derived());
+
+      analyzePattern_impl();
+    }
 
     /** Performs a symbolic decomposition on the sparcity of \a matrix.
       *
@@ -181,15 +200,47 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       * \sa factorize(), compute()
       */
     template<typename InputMatrixType, typename ListType>
-    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& variableList, const int mode)
+    void analyzePattern(const InputMatrixType& matrix, const ListType& list)
     {
       if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
       if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
 
       grab(matrix.derived());
-      this->changedEntries = variableList;
+
       analyzePattern_impl();
     }
+#ifdef EIGEN_DUMP
+    template<typename InputMatrixType>
+    void printMTX(const InputMatrixType& matrix, int counter)
+    {
+	int i, j;
+	int n = internal::convert_index<int>(matrix.rows());
+
+ 	StorageIndex* Ap = const_cast<StorageIndex*>(matrix.outerIndexPtr());
+	StorageIndex* Ai = const_cast<StorageIndex*>(matrix.innerIndexPtr()); 
+	Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
+	int nz = matrix.nonZeros();
+
+	std::ofstream ofs;
+	char strA[32];
+	char counterstring[32];
+	sprintf(counterstring, "%d", counter);
+	strcpy(strA, "A");
+	strcat(strA, counterstring);
+	strcat(strA, ".mtx");
+	ofs.open(strA);
+	ofs << "%%MatrixMarket matrix coordinate real general" << std::endl;
+	ofs << n << " " << n << " " << nz << std::endl;
+	for(i = 0 ; i < n ; i++)
+	{
+		for(j = Ap[i] ; j < Ap[i+1] ; j++)
+		{
+			ofs << i+1 << " " << Ai[j]+1 << " " << Ax[j] << std::endl;
+		}
+	}
+	ofs.close();
+    }
+#endif
 
 
     /** Provides access to the control settings array used by KLU.
@@ -222,11 +273,40 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     template <typename InputMatrixType, typename ListType>
     void factorize_partial(const InputMatrixType &matrix, const ListType& variableList) {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
-      /* there's only dumping if fact.path is computed */
-      m_dump = 0;
-      m_common.dump = m_dump;
+      
+      /* m_dump = doDump;
+       * m_common.dump = m_dump;
+       */
+#ifdef EIGEN_DUMP
+      m_limit = 2;
+      char *limit = getenv("EIGEN_MATRIX_LIMIT");
+      if(limit != NULL)
+      {
+	 m_limit = atoi(limit);
+	 if(m_limit <= 0)
+	 {
+		 m_limit = 2;
+	 }
+      }
+#endif
       grab(matrix.derived());
       this->changedEntries = variableList;
+      factorize_with_path_impl();
+    }
+
+    /** Placeholder function. Should be deleted / improved later
+     *
+     * \sa analyzePattern(), compute()
+     */
+    template <typename InputMatrixType>
+    void factorize_partial(const InputMatrixType &matrix) {
+      eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
+      
+      /*
+       * m_dump = 0;
+       * m_common.dump = m_dump;
+      */
+      grab(matrix.derived());
       factorize_with_path_impl();
     }
 
@@ -241,10 +321,13 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     {
       eigen_assert(m_analysisIsOk && "KLU: you must first call analyzePattern()");
       if(m_numeric)
+      {
         klu_free_numeric(&m_numeric,&m_common);
+      }
 
       grab(matrix.derived());
-      if(m_symbolic->nz != mp_matrix.nonZeros()){
+      if(m_symbolic->nz != mp_matrix.nonZeros())
+      {
         analyzePattern_impl();
       }
       factorize_impl();
@@ -265,7 +348,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       /**/
 
       grab(matrix.derived());
-      // temporary workaround for a problem in DPsim
+      /*temporary workaround for a problem in DPsim (?)*/
       if(m_symbolic->nz != mp_matrix.nonZeros()){
         if(m_numeric)
           klu_free_numeric(&m_numeric,&m_common);
@@ -326,10 +409,9 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
 
       klu_defaults(&m_common);
-      // m_common.ordering = 1;
-      // use no scaling for now. TODO: FIX!
       m_scale = 0;
       m_common.scale = m_scale;
+
     }
 
     void analyzePattern_impl()
@@ -374,8 +456,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
         changeVector[counter] = i.second;
         counter++;
       }
-      m_partial_is_ok = klu_compute_path2(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
-
+      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
@@ -393,6 +474,14 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
     void refactorize_partial_impl()
     {
+#ifdef EIGEN_DUMP
+      static int counter = 1;
+      if(counter == 1 || counter == m_limit)
+      {
+	      printMTX(mp_matrix, counter);
+      }
+      counter++;
+#endif
       int m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
 
@@ -444,6 +533,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     mutable bool m_extractedDataAreDirty;
     int m_dump;
     int m_scale;
+    int m_limit;
 
   private:
     KLU(const KLU& ) { }
