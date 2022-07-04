@@ -162,7 +162,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       *
       * \sa factorize(), compute()
       */
-    template<typename InputMatrixType, typename ListType>
+    template<typename InputMatrixType>
     void analyzePattern(const InputMatrixType& matrix)
     {
       if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
@@ -377,7 +377,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
         changeVector[counter] = i.second;
         counter++;
       }
-      m_partial_is_ok = klu_compute_path2(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
 
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
