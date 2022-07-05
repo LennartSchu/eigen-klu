@@ -260,6 +260,23 @@ public:
     factorize_with_path_impl();
   }
 
+  /** Performs a numeric decomposition of \a matrix and computes factorization path
+   *
+   * The given matrix must has the same sparcity than the matrix on which the
+   * pattern anylysis has been performed.
+   *
+   * \sa analyzePattern(), compute()
+   */
+  template <typename InputMatrixType, typename ListType>
+  void factorize_partial(const InputMatrixType &matrix, const ListType& list) {
+    eigen_assert(m_analysisIsOk &&
+                 "NICSLU: you must first call analyzePattern()");
+
+    grab(matrix.derived());
+    this->changedEntries = list;
+    factorize_with_path_impl();
+  }
+
   /** Performs a numeric decomposition of \a matrix
    *
    * The given matrix must has the same sparcity than the matrix on which the
