@@ -189,7 +189,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
 
       grab(matrix.derived());
-
+      this->changedEntries = list;
       analyzePattern_impl();
     }
 
