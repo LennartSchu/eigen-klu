@@ -188,9 +188,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
       if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
 
+      m_mode = mode;
       grab(matrix.derived());
       this->changedEntries = list;
-      analyzePattern_impl();
+      analyzePatternPartial_impl();
     }
 
     /** Performs a symbolic decomposition on the sparcity of \a matrix.
@@ -433,6 +434,35 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       }
     }
 
+    void analyzePatternPartial_impl()
+    {
+      m_info = InvalidInput;
+      m_analysisIsOk = false;
+      m_factorizationIsOk = false;
+      m_refactorizationIsOk = false;
+      m_partial_refactorizationIsOk = false;
+      m_partial_is_ok = false;
+      int changeLen = changedEntries.size();
+      int *changeVector = (int*)calloc(sizeof(int), changeLen);
+      int counter = 0;
+      for(std::pair<UInt, UInt> i : changedEntries){
+        changeVector[counter] = i.second;
+        counter++;
+      }
+
+      m_symbolic = klu_analyze_partial(internal::convert_index<int>(mp_matrix.rows()),
+                                     const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
+                                     changeVector, m_mode, &m_common);
+
+      free(changeVector);
+      if (m_symbolic) {
+         m_isInitialized = true;
+         m_info = Success;
+         m_analysisIsOk = true;
+         m_extractedDataAreDirty = true;
+      }
+    }
+
     void factorize_impl()
     {
 
@@ -456,7 +486,15 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
         changeVector[counter] = i.second;
         counter++;
       }
-      m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+
+      if(m_mode == KLU_AMD_FP || m_mode == KLU_AMD_NV_FP)
+      {
+        m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+      }
+      else if(m_mode == KLU_AMD_RR || m_mode == KLU_AMD_BRA_RR)
+      {
+        m_partial_is_ok = klu_determine_start(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+      }
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
@@ -482,9 +520,17 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       }
       counter++;
 #endif
-      int m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+      int m_partial_refact = 0;
+      if(m_mode == KLU_AMD_FP || m_mode == KLU_AMD_NV_FP)
+      {
+        m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
-
+      }
+      else if(m_mode == KLU_AMD_RR || m_mode == KLU_AMD_BRA_RR)
+      {
+        m_partial_refact = klu_fpartial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+                                    m_symbolic, m_numeric, &m_common);
+      }
       if(m_common.status == KLU_PIVOT_FAULT){
         /* pivot became too small => fully factorize again */
         factorize_impl();
@@ -534,6 +580,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     int m_dump;
     int m_scale;
     int m_limit;
+    int m_mode;
 
   private:
     KLU(const KLU& ) { }
