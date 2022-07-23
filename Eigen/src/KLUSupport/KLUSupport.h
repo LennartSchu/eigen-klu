@@ -191,7 +191,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_mode = mode;
       grab(matrix.derived());
       this->changedEntries = list;
-      analyzePatternPartial_impl();
+      analyzePattern_impl();
     }
 
     /** Performs a symbolic decomposition on the sparcity of \a matrix.
@@ -423,38 +423,38 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_refactorizationIsOk = false;
       m_partial_refactorizationIsOk = false;
       m_partial_is_ok = false;
-      m_symbolic = klu_analyze(internal::convert_index<int>(mp_matrix.rows()),
-                                     const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
-                                     &m_common);
-      if (m_symbolic) {
-         m_isInitialized = true;
-         m_info = Success;
-         m_analysisIsOk = true;
-         m_extractedDataAreDirty = true;
+
+      const int n = internal::convert_index<int>(mp_matrix.rows());
+
+      if(m_mode == KLU_AMD_BRA_RR || m_mode == KLU_AMD_NV_FP)
+      {
+        int changeLen = changedEntries.size();
+        int *changeVector = (int*)calloc(sizeof(int), changeLen);
+        int *varying = (int*)calloc(sizeof(int), n);
+        int counter = 0;
+        for(std::pair<UInt, UInt> i : changedEntries){
+          changeVector[counter] = i.second;
+          counter++;
+        }
+
+        for(int i = 0; i < counter ; i++)
+        {
+          varying[changeVector[i]] = 1;
+        }
+
+        m_symbolic = klu_analyze_partial(n,
+                                      const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
+                                      varying, m_mode, &m_common);
+
+        free(changeVector);
+        free(varying);
       }
-    }
-
-    void analyzePatternPartial_impl()
-    {
-      m_info = InvalidInput;
-      m_analysisIsOk = false;
-      m_factorizationIsOk = false;
-      m_refactorizationIsOk = false;
-      m_partial_refactorizationIsOk = false;
-      m_partial_is_ok = false;
-      int changeLen = changedEntries.size();
-      int *changeVector = (int*)calloc(sizeof(int), changeLen);
-      int counter = 0;
-      for(std::pair<UInt, UInt> i : changedEntries){
-        changeVector[counter] = i.second;
-        counter++;
-      }
-
-      m_symbolic = klu_analyze_partial(internal::convert_index<int>(mp_matrix.rows()),
+      else
+      {
+        m_symbolic = klu_analyze(n,
                                      const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
-                                     changeVector, m_mode, &m_common);
-
-      free(changeVector);
+                                    &m_common);
+      }
       if (m_symbolic) {
          m_isInitialized = true;
          m_info = Success;
