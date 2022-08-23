@@ -410,9 +410,29 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_extractedDataAreDirty = true;
 
       klu_defaults(&m_common);
-      m_scale = 0;
-      m_common.scale = m_scale;
 
+      char* variable = getenv("KLU_SCALING");
+      m_scale = 0;
+      if(variable!=NULL)
+      {
+        m_scale = atoi(variable);
+        if(m_scale >= 2)
+        {
+          m_scale = 0;
+        }
+      }
+      variable = getenv("KLU_BTF");
+      m_btf = 1;
+      if(variable!=NULL)
+      {
+        m_btf = atoi(variable);
+        if(m_btf<0||m_btf>1)
+        {
+          m_btf = 1;
+        }
+      }
+      m_common.btf = m_btf;
+      m_common.scale = m_scale;
     }
 
     void analyzePattern_impl()
@@ -476,8 +496,10 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     }
 
     void factorize_with_path_impl() {
-      m_numeric = klu_factor(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
-                                    m_symbolic, &m_common, Scalar());
+      StorageIndex* Ap = const_cast<StorageIndex*>(mp_matrix.outerIndexPtr());
+      StorageIndex* Ai = const_cast<StorageIndex*>(mp_matrix.innerIndexPtr());
+      Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
+      m_numeric = klu_factor(Ap, Ai, Ax, m_symbolic, &m_common, Scalar());
 
       int changeLen = changedEntries.size();
       int *changeVector = (int*)calloc(sizeof(int), changeLen);
@@ -523,12 +545,12 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       int m_partial_refact = 0;
       if(m_mode == KLU_AMD_FP || m_mode == KLU_AMD_NV_FP)
       {
-        m_partial_refact = klu_partial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+        m_partial_refact = klu_partial_factorization_path(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
       }
       else if(m_mode == KLU_AMD_RR || m_mode == KLU_AMD_BRA_RR)
       {
-        m_partial_refact = klu_fpartial(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
+        m_partial_refact = klu_partial_refactorization_restart(const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()), const_cast<Scalar*>(mp_matrix.valuePtr()),
                                     m_symbolic, m_numeric, &m_common);
       }
       if(m_common.status == KLU_PIVOT_FAULT){
@@ -581,6 +603,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
     int m_scale;
     int m_limit;
     int m_mode;
+    int m_btf;
 
   private:
     KLU(const KLU& ) { }
