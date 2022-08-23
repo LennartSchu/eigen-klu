@@ -501,21 +501,23 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
       m_numeric = klu_factor(Ap, Ai, Ax, m_symbolic, &m_common, Scalar());
 
-      int changeLen = changedEntries.size();
-      int *changeVector = (int*)calloc(sizeof(int), changeLen);
+      int varying_entries = changedEntries.size();
+      int *varying_columns = (int*)calloc(sizeof(int), varying_entries);
+      int *varying_rows = (int*)calloc(sizeof(int), varying_entries);
       int counter = 0;
       for(std::pair<UInt, UInt> i : changedEntries){
-        changeVector[counter] = i.second;
+        varying_rows[counter] = i.first;
+        varying_columns[counter] = i.second;
         counter++;
       }
 
       if(m_mode == KLU_AMD_FP || m_mode == KLU_AMD_NV_FP)
       {
-        m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+        m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, Ap, Ai, varying_columns, varying_rows, varying_entries);
       }
       else if(m_mode == KLU_AMD_RR || m_mode == KLU_AMD_BRA_RR)
       {
-        m_partial_is_ok = klu_determine_start(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+        m_partial_is_ok = klu_determine_start(m_symbolic, m_numeric, &m_common, Ap, Ai, varying_columns, varying_rows, varying_entries);
       }
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
