@@ -416,7 +416,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       if(variable!=NULL)
       {
         m_scale = atoi(variable);
-        if(m_scale >= 2)
+        if(m_scale > 2)
         {
           m_scale = 0;
         }
