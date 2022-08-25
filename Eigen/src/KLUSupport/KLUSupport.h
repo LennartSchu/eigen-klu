@@ -448,26 +448,22 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
       if(m_mode == KLU_AMD_BRA_RR || m_mode == KLU_AMD_NV_FP)
       {
-        int changeLen = changedEntries.size();
-        int *changeVector = (int*)calloc(sizeof(int), changeLen);
-        int *varying = (int*)calloc(sizeof(int), n);
+        int varying_entries = changedEntries.size();
+        int *varying_columns = (int*)calloc(sizeof(int), varying_entries);
+        int *varying_rows = (int*)calloc(sizeof(int), varying_entries);
         int counter = 0;
         for(std::pair<UInt, UInt> i : changedEntries){
-          changeVector[counter] = i.second;
+          varying_rows[counter] = i.first;
+          varying_columns[counter] = i.second;
           counter++;
-        }
-
-        for(int i = 0; i < counter ; i++)
-        {
-          varying[changeVector[i]] = 1;
         }
 
         m_symbolic = klu_analyze_partial(n,
                                       const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
-                                      varying, m_mode, &m_common);
+                                      varying_columns, varying_rows, varying_entries, m_mode, &m_common);
 
-        free(changeVector);
-        free(varying);
+        free(varying_rows);
+        free(varying_columns);
       }
       else
       {
@@ -522,6 +518,9 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
+
+      free(varying_columns);
+      free(varying_rows);
     }
 
     void refactorize_impl()
