@@ -183,12 +183,11 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       * \sa factorize(), compute()
       */
     template<typename InputMatrixType, typename ListType>
-    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& list, const int mode)
+    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& list)
     {
       if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
       if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
 
-      m_mode = mode;
       grab(matrix.derived());
       this->changedEntries = list;
       analyzePattern_impl();
@@ -411,18 +410,24 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
       klu_defaults(&m_common);
 
-      char* variable = getenv("KLU_SCALING");
+      /* regular amd ordering with factorization path is the default */
+      m_mode = KLU_AMD_FP;
+      /* no scaling is the default here */
       m_scale = 0;
+      /* btf is enabled */
+      m_btf = 1;
+
+      char* variable = getenv("KLU_SCALING");
       if(variable!=NULL)
       {
         m_scale = atoi(variable);
+        /* m_scale < 0 valid here (evaluates to no scaling) */
         if(m_scale > 2)
         {
           m_scale = 0;
         }
       }
       variable = getenv("KLU_BTF");
-      m_btf = 1;
       if(variable!=NULL)
       {
         m_btf = atoi(variable);
@@ -433,6 +438,16 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       }
       m_common.btf = m_btf;
       m_common.scale = m_scale;
+      variable = getenv("KLU_METHOD");
+      if(variable != NULL)
+      {
+        m_mode = atoi(variable);
+        /* might better be a switch-case? */
+        if(m_mode < KLU_MIN_METHOD || m_mode>KLU_MAX_METHOD)
+        {
+          m_mode = KLU_AMD_FP;
+        }
+      }
     }
 
     void analyzePattern_impl()
