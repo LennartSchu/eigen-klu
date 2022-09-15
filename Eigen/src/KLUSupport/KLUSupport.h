@@ -571,7 +571,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       }
       if(m_common.status == KLU_PIVOT_FAULT){
         /* pivot became too small => fully factorize again */
-        factorize_impl();
+        factorize_with_path_impl();
       }
       m_info = m_partial_refact ? Success : NumericalIssue;
       m_partial_refactorizationIsOk = m_partial_refact ? 1 : 0;
