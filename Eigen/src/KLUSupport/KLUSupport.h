@@ -183,12 +183,11 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       * \sa factorize(), compute()
       */
     template<typename InputMatrixType, typename ListType>
-    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& list, const int mode)
+    void analyzePatternPartial(const InputMatrixType& matrix, const ListType& list)
     {
       if(m_symbolic) klu_free_symbolic(&m_symbolic, &m_common);
       if(m_numeric)  klu_free_numeric(&m_numeric, &m_common);
 
-      m_mode = mode;
       grab(matrix.derived());
       this->changedEntries = list;
       analyzePattern_impl();
@@ -411,18 +410,24 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
       klu_defaults(&m_common);
 
-      char* variable = getenv("KLU_SCALING");
+      /* regular amd ordering with factorization path is the default */
+      m_mode = KLU_AMD_FP;
+      /* no scaling is the default here */
       m_scale = 0;
+      /* btf is enabled */
+      m_btf = 1;
+
+      char* variable = getenv("KLU_SCALING");
       if(variable!=NULL)
       {
         m_scale = atoi(variable);
-        if(m_scale >= 2)
+        /* m_scale < 0 valid here (evaluates to no scaling) */
+        if(m_scale > 2)
         {
           m_scale = 0;
         }
       }
       variable = getenv("KLU_BTF");
-      m_btf = 1;
       if(variable!=NULL)
       {
         m_btf = atoi(variable);
@@ -433,6 +438,16 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       }
       m_common.btf = m_btf;
       m_common.scale = m_scale;
+      variable = getenv("KLU_METHOD");
+      if(variable != NULL)
+      {
+        m_mode = atoi(variable);
+        /* might better be a switch-case? */
+        if(m_mode < KLU_MIN_METHOD || m_mode>KLU_MAX_METHOD)
+        {
+          m_mode = KLU_AMD_FP;
+        }
+      }
     }
 
     void analyzePattern_impl()
@@ -448,26 +463,22 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
 
       if(m_mode == KLU_AMD_BRA_RR || m_mode == KLU_AMD_NV_FP)
       {
-        int changeLen = changedEntries.size();
-        int *changeVector = (int*)calloc(sizeof(int), changeLen);
-        int *varying = (int*)calloc(sizeof(int), n);
+        int varying_entries = changedEntries.size();
+        int *varying_columns = (int*)calloc(sizeof(int), varying_entries);
+        int *varying_rows = (int*)calloc(sizeof(int), varying_entries);
         int counter = 0;
         for(std::pair<UInt, UInt> i : changedEntries){
-          changeVector[counter] = i.second;
+          varying_rows[counter] = i.first;
+          varying_columns[counter] = i.second;
           counter++;
-        }
-
-        for(int i = 0; i < counter ; i++)
-        {
-          varying[changeVector[i]] = 1;
         }
 
         m_symbolic = klu_analyze_partial(n,
                                       const_cast<StorageIndex*>(mp_matrix.outerIndexPtr()), const_cast<StorageIndex*>(mp_matrix.innerIndexPtr()),
-                                      varying, m_mode, &m_common);
+                                      varying_columns, varying_rows, varying_entries, m_mode, &m_common);
 
-        free(changeVector);
-        free(varying);
+        free(varying_rows);
+        free(varying_columns);
       }
       else
       {
@@ -501,25 +512,30 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       Scalar* Ax = const_cast<Scalar*>(mp_matrix.valuePtr());
       m_numeric = klu_factor(Ap, Ai, Ax, m_symbolic, &m_common, Scalar());
 
-      int changeLen = changedEntries.size();
-      int *changeVector = (int*)calloc(sizeof(int), changeLen);
+      int varying_entries = changedEntries.size();
+      int *varying_columns = (int*)calloc(sizeof(int), varying_entries);
+      int *varying_rows = (int*)calloc(sizeof(int), varying_entries);
       int counter = 0;
       for(std::pair<UInt, UInt> i : changedEntries){
-        changeVector[counter] = i.second;
+        varying_rows[counter] = i.first;
+        varying_columns[counter] = i.second;
         counter++;
       }
 
       if(m_mode == KLU_AMD_FP || m_mode == KLU_AMD_NV_FP)
       {
-        m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+        m_partial_is_ok = klu_compute_path(m_symbolic, m_numeric, &m_common, Ap, Ai, varying_columns, varying_rows, varying_entries);
       }
       else if(m_mode == KLU_AMD_RR || m_mode == KLU_AMD_BRA_RR)
       {
-        m_partial_is_ok = klu_determine_start(m_symbolic, m_numeric, &m_common, changeVector, changeLen);
+        m_partial_is_ok = klu_determine_start(m_symbolic, m_numeric, &m_common, Ap, Ai, varying_columns, varying_rows, varying_entries);
       }
       m_info = m_numeric ? Success : NumericalIssue;
       m_factorizationIsOk = m_numeric ? 1 : 0;
       m_extractedDataAreDirty = true;
+
+      free(varying_columns);
+      free(varying_rows);
     }
 
     void refactorize_impl()
@@ -555,7 +571,7 @@ class KLU : public SparseSolverBase<KLU<_MatrixType> >
       }
       if(m_common.status == KLU_PIVOT_FAULT){
         /* pivot became too small => fully factorize again */
-        factorize_impl();
+        factorize_with_path_impl();
       }
       m_info = m_partial_refact ? Success : NumericalIssue;
       m_partial_refactorizationIsOk = m_partial_refact ? 1 : 0;
